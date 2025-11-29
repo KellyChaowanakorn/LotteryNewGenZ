@@ -291,6 +291,109 @@ export default function Admin() {
     }
   });
 
+  const chartColors = [
+    "hsl(var(--primary))",
+    "hsl(var(--chart-2))",
+    "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))",
+    "hsl(var(--chart-5))",
+    "#10B981",
+    "#F59E0B",
+    "#EF4444",
+    "#8B5CF6",
+    "#EC4899",
+    "#14B8A6",
+    "#F97316"
+  ];
+
+  const bettingByLotteryData = useMemo(() => {
+    const grouped: Record<string, { amount: number; count: number }> = {};
+    allBets.forEach(bet => {
+      if (!grouped[bet.lotteryType]) {
+        grouped[bet.lotteryType] = { amount: 0, count: 0 };
+      }
+      grouped[bet.lotteryType].amount += bet.amount;
+      grouped[bet.lotteryType].count += 1;
+    });
+    return Object.entries(grouped).map(([type, data]) => ({
+      name: lotteryTypeNames[type as LotteryType]?.[language] || type,
+      value: data.amount,
+      count: data.count
+    }));
+  }, [allBets, language]);
+
+  const betTypeDistribution = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    allBets.forEach(bet => {
+      grouped[bet.betType] = (grouped[bet.betType] || 0) + bet.amount;
+    });
+    return Object.entries(grouped).map(([type, amount]) => ({
+      name: betTypeNames[type as BetType]?.[language] || type,
+      value: amount
+    }));
+  }, [allBets, language]);
+
+  const hotNumbers = useMemo(() => {
+    const numberCounts: Record<string, number> = {};
+    allBets.forEach(bet => {
+      if (!numberCounts[bet.numbers]) {
+        numberCounts[bet.numbers] = 0;
+      }
+      numberCounts[bet.numbers]++;
+    });
+    return Object.entries(numberCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([number, count]) => ({
+        number,
+        count
+      }));
+  }, [allBets]);
+
+  const dailyBettingData = useMemo(() => {
+    const dailyData: Record<string, { date: string; amount: number; count: number }> = {};
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      last7Days.push(dateStr);
+      dailyData[dateStr] = { date: dateStr, amount: 0, count: 0 };
+    }
+    allBets.forEach(bet => {
+      const betDate = new Date(bet.createdAt).toISOString().split('T')[0];
+      if (dailyData[betDate]) {
+        dailyData[betDate].amount += bet.amount;
+        dailyData[betDate].count += 1;
+      }
+    });
+    return last7Days.map(date => ({
+      ...dailyData[date],
+      displayDate: new Date(date).toLocaleDateString(language === "th" ? "th-TH" : "en-US", { weekday: 'short', day: 'numeric' })
+    }));
+  }, [allBets, language]);
+
+  const affiliatePerformance = useMemo(() => {
+    return allUsers
+      .filter(u => u.affiliateEarnings > 0)
+      .sort((a, b) => b.affiliateEarnings - a.affiliateEarnings)
+      .slice(0, 10)
+      .map(user => ({
+        username: user.username,
+        earnings: user.affiliateEarnings
+      }));
+  }, [allUsers]);
+
+  const pendingDeposits = allTransactions.filter(t => t.type === "deposit" && t.status === "pending");
+  const filteredBets = betFilter === "all" 
+    ? allBets 
+    : allBets.filter(b => b.status === betFilter);
+
+  const getUsernameById = (userId: number) => {
+    const user = allUsers.find(u => u.id === userId);
+    return user?.username || `User #${userId}`;
+  };
+
   if (isCheckingAuth) {
     return (
       <div className="min-h-full flex items-center justify-center p-4">
@@ -390,109 +493,6 @@ export default function Admin() {
   const handleProcessResult = (id: number) => {
     processResultMutation.mutate(id);
   };
-
-  const pendingDeposits = allTransactions.filter(t => t.type === "deposit" && t.status === "pending");
-  const filteredBets = betFilter === "all" 
-    ? allBets 
-    : allBets.filter(b => b.status === betFilter);
-
-  const getUsernameById = (userId: number) => {
-    const user = allUsers.find(u => u.id === userId);
-    return user?.username || `User #${userId}`;
-  };
-
-  const chartColors = [
-    "hsl(var(--primary))",
-    "hsl(var(--chart-2))",
-    "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))",
-    "hsl(var(--chart-5))",
-    "#10B981",
-    "#F59E0B",
-    "#EF4444",
-    "#8B5CF6",
-    "#EC4899",
-    "#14B8A6",
-    "#F97316"
-  ];
-
-  const bettingByLotteryData = useMemo(() => {
-    const grouped: Record<string, { amount: number; count: number }> = {};
-    allBets.forEach(bet => {
-      if (!grouped[bet.lotteryType]) {
-        grouped[bet.lotteryType] = { amount: 0, count: 0 };
-      }
-      grouped[bet.lotteryType].amount += bet.amount;
-      grouped[bet.lotteryType].count += 1;
-    });
-    return Object.entries(grouped).map(([type, data]) => ({
-      name: lotteryTypeNames[type as LotteryType]?.[language] || type,
-      value: data.amount,
-      count: data.count
-    }));
-  }, [allBets, language]);
-
-  const betTypeDistribution = useMemo(() => {
-    const grouped: Record<string, number> = {};
-    allBets.forEach(bet => {
-      grouped[bet.betType] = (grouped[bet.betType] || 0) + bet.amount;
-    });
-    return Object.entries(grouped).map(([type, amount]) => ({
-      name: betTypeNames[type as BetType]?.[language] || type,
-      value: amount
-    }));
-  }, [allBets, language]);
-
-  const hotNumbers = useMemo(() => {
-    const numberCounts: Record<string, number> = {};
-    allBets.forEach(bet => {
-      if (!numberCounts[bet.numbers]) {
-        numberCounts[bet.numbers] = 0;
-      }
-      numberCounts[bet.numbers]++;
-    });
-    return Object.entries(numberCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([number, count]) => ({
-        number,
-        count
-      }));
-  }, [allBets]);
-
-  const dailyBettingData = useMemo(() => {
-    const dailyData: Record<string, { date: string; amount: number; count: number }> = {};
-    const last7Days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      last7Days.push(dateStr);
-      dailyData[dateStr] = { date: dateStr, amount: 0, count: 0 };
-    }
-    allBets.forEach(bet => {
-      const betDate = new Date(bet.createdAt).toISOString().split('T')[0];
-      if (dailyData[betDate]) {
-        dailyData[betDate].amount += bet.amount;
-        dailyData[betDate].count += 1;
-      }
-    });
-    return last7Days.map(date => ({
-      ...dailyData[date],
-      displayDate: new Date(date).toLocaleDateString(language === "th" ? "th-TH" : "en-US", { weekday: 'short', day: 'numeric' })
-    }));
-  }, [allBets, language]);
-
-  const affiliatePerformance = useMemo(() => {
-    return allUsers
-      .filter(u => u.affiliateEarnings > 0)
-      .sort((a, b) => b.affiliateEarnings - a.affiliateEarnings)
-      .slice(0, 10)
-      .map(user => ({
-        username: user.username,
-        earnings: user.affiliateEarnings
-      }));
-  }, [allUsers]);
 
   return (
     <div className="min-h-full">
