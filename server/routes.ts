@@ -348,7 +348,9 @@ export async function registerRoutes(
           lotteryType: item.lotteryType,
           betType: item.betType,
           numbers: item.numbers,
-          amount: item.amount
+          amount: item.amount,
+          isSet: item.isSet,
+          setIndex: item.setIndex
         })),
         totalAmount,
         ip: clientIp
@@ -764,7 +766,7 @@ export async function registerRoutes(
         result.push(char + perm);
       }
     }
-    return [...new Set(result)];
+    return Array.from(new Set(result));
   }
 
   app.post("/api/lottery-results/:id/process", async (req, res) => {

@@ -102,6 +102,8 @@ export interface BetItem {
   betType: string;
   numbers: string;
   amount: number;
+  isSet?: boolean;
+  setIndex?: number;
 }
 
 export interface BetNotificationData {
@@ -115,17 +117,43 @@ export interface BetNotificationData {
 export async function sendBetNotification(data: BetNotificationData): Promise<boolean> {
   const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
   
-  let betDetails = '';
-  data.items.forEach((item, index) => {
-    const lotteryName = lotteryTypeNames[item.lotteryType] || item.lotteryType;
-    const betTypeName = betTypeNames[item.betType] || item.betType;
-    betDetails += `\n${index + 1}. 🎰 ${lotteryName}`;
-    betDetails += `\n   📋 ประเภท: ${betTypeName}`;
-    betDetails += `\n   🔢 เลข: ${item.numbers}`;
-    betDetails += `\n   💵 เดิมพัน: ${item.amount.toLocaleString()} บาท`;
-  });
+  const setItems = data.items.filter(item => item.isSet);
+  const regularItems = data.items.filter(item => !item.isSet);
   
-  const message = `🎯 <b>ซื้อหวยใหม่!</b>
+  let betDetails = '';
+  
+  if (setItems.length > 0) {
+    const lotteryName = lotteryTypeNames[setItems[0].lotteryType] || setItems[0].lotteryType;
+    const betTypeName = betTypeNames[setItems[0].betType] || setItems[0].betType;
+    const setTotalAmount = setItems.reduce((sum, item) => sum + item.amount, 0);
+    
+    betDetails += `\n📦 <b>หวยชุด</b>`;
+    betDetails += `\n🎰 ${lotteryName} | ${betTypeName}`;
+    setItems.forEach((item) => {
+      betDetails += `\n   ชุดที่ ${item.setIndex}: ${item.numbers} (${item.amount.toLocaleString()} บาท)`;
+    });
+    betDetails += `\n   💵 รวมหวยชุด: ${setTotalAmount.toLocaleString()} บาท`;
+  }
+  
+  if (regularItems.length > 0) {
+    if (setItems.length > 0) {
+      betDetails += '\n';
+    }
+    regularItems.forEach((item, index) => {
+      const lotteryName = lotteryTypeNames[item.lotteryType] || item.lotteryType;
+      const betTypeName = betTypeNames[item.betType] || item.betType;
+      betDetails += `\n${index + 1}. 🎰 ${lotteryName}`;
+      betDetails += `\n   📋 ประเภท: ${betTypeName}`;
+      betDetails += `\n   🔢 เลข: ${item.numbers}`;
+      betDetails += `\n   💵 เดิมพัน: ${item.amount.toLocaleString()} บาท`;
+    });
+  }
+  
+  const title = setItems.length > 0 && regularItems.length === 0 
+    ? '📦 <b>ซื้อหวยชุดใหม่!</b>' 
+    : '🎯 <b>ซื้อหวยใหม่!</b>';
+  
+  const message = `${title}
 👤 ผู้ใช้: ${data.username}
 🆔 ID: ${data.userId}
 ${betDetails}

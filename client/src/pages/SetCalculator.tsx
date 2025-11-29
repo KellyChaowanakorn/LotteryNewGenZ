@@ -205,7 +205,9 @@ export default function SetCalculator() {
         lotteryType,
         betType,
         numbers: set.numbers.join(","),
-        amount: price
+        amount: price,
+        isSet: true,
+        setIndex: idx + 1
       });
     });
 

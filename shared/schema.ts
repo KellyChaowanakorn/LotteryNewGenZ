@@ -217,7 +217,9 @@ export const cartItemSchema = z.object({
   lotteryType: z.enum(lotteryTypes),
   betType: z.enum(betTypes),
   numbers: z.string(),
-  amount: z.number()
+  amount: z.number(),
+  isSet: z.boolean().optional(),
+  setIndex: z.number().optional()
 });
 
 export type CartItem = z.infer<typeof cartItemSchema>;
