@@ -26,7 +26,8 @@ import {
   type User,
   type Transaction,
   type Bet,
-  type PayoutSetting
+  type PayoutSetting,
+  type BetLimitWithLotteryTypes
 } from "@shared/schema";
 import {
   Settings,
@@ -130,6 +131,11 @@ export default function Admin() {
   const [editingPayoutRate, setEditingPayoutRate] = useState<string | null>(null);
   const [editedRate, setEditedRate] = useState<string>("");
 
+  const [limitNumber, setLimitNumber] = useState("");
+  const [limitMaxAmount, setLimitMaxAmount] = useState("");
+  const [limitLotteryTypes, setLimitLotteryTypes] = useState<string[]>([]);
+  const [isAllLotteryTypes, setIsAllLotteryTypes] = useState(true);
+
   const handleLogout = async () => {
     await logout();
     toast({
@@ -171,6 +177,11 @@ export default function Admin() {
 
   const { data: payoutSettings = [], isLoading: isLoadingPayoutRates, isError: isPayoutRatesError } = useQuery<PayoutSetting[]>({
     queryKey: ["/api/payout-rates"],
+    enabled: isAdminAuthenticated,
+  });
+
+  const { data: betLimits = [], isLoading: isLoadingBetLimits } = useQuery<BetLimitWithLotteryTypes[]>({
+    queryKey: ["/api/bet-limits"],
     enabled: isAdminAuthenticated,
   });
 
@@ -323,6 +334,52 @@ export default function Admin() {
       toast({
         title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
         variant: "destructive"
+      });
+    }
+  });
+
+  const addBetLimitMutation = useMutation({
+    mutationFn: async (data: { number: string; maxAmount: number; lotteryTypes: string[] }) => {
+      const res = await apiRequest("POST", "/api/bet-limits", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bet-limits"] });
+      setLimitNumber("");
+      setLimitMaxAmount("");
+      setLimitLotteryTypes([]);
+      setIsAllLotteryTypes(true);
+      toast({
+        title: language === "th" ? "เพิ่มลิมิตสำเร็จ" : "Bet limit added"
+      });
+    },
+    onError: () => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const updateBetLimitMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/bet-limits/${id}`, { isActive });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bet-limits"] });
+    }
+  });
+
+  const deleteBetLimitMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/bet-limits/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bet-limits"] });
+      toast({
+        title: language === "th" ? "ลบลิมิตแล้ว" : "Bet limit removed"
       });
     }
   });
@@ -653,7 +710,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm">
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>
@@ -682,6 +739,10 @@ export default function Admin() {
             <TabsTrigger value="blocked" className="gap-1 text-xs sm:text-sm">
               <Ban className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "อั้น" : "Block"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="limits" className="gap-1 text-xs sm:text-sm">
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === "th" ? "ลิมิต" : "Limits"}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1614,6 +1675,199 @@ export default function Admin() {
                       </Card>
                     ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="limits" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  {language === "th" ? "เพิ่มลิมิตยอดแทง" : "Add Betting Limit"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" 
+                    ? "กำหนดยอดแทงสูงสุดต่อเลขในแต่ละหวย" 
+                    : "Set maximum bet amount per number for each lottery"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="limit-number">{language === "th" ? "เลข" : "Number"}</Label>
+                    <Input
+                      id="limit-number"
+                      placeholder={language === "th" ? "เช่น 00, 123" : "e.g. 00, 123"}
+                      value={limitNumber}
+                      onChange={(e) => setLimitNumber(e.target.value)}
+                      data-testid="input-limit-number"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="limit-max-amount">{language === "th" ? "ยอดสูงสุด (บาท)" : "Max Amount (฿)"}</Label>
+                    <Input
+                      id="limit-max-amount"
+                      type="number"
+                      placeholder={language === "th" ? "เช่น 1000" : "e.g. 1000"}
+                      value={limitMaxAmount}
+                      onChange={(e) => setLimitMaxAmount(e.target.value)}
+                      data-testid="input-limit-max-amount"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "ใช้กับหวย" : "Apply to Lottery"}</Label>
+                    <Select
+                      value={isAllLotteryTypes ? "all" : "specific"}
+                      onValueChange={(v) => {
+                        setIsAllLotteryTypes(v === "all");
+                        if (v === "all") setLimitLotteryTypes([]);
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-limit-lottery-scope">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{language === "th" ? "ทุกหวย" : "All Lotteries"}</SelectItem>
+                        <SelectItem value="specific">{language === "th" ? "เลือกหวย" : "Specific"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={() => {
+                        if (!limitNumber || !limitMaxAmount) return;
+                        addBetLimitMutation.mutate({
+                          number: limitNumber,
+                          maxAmount: parseFloat(limitMaxAmount),
+                          lotteryTypes: isAllLotteryTypes ? [] : limitLotteryTypes
+                        });
+                      }}
+                      disabled={!limitNumber || !limitMaxAmount || addBetLimitMutation.isPending}
+                      className="w-full"
+                      data-testid="button-add-limit"
+                    >
+                      {addBetLimitMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Plus className="h-4 w-4 mr-2" />
+                      )}
+                      {language === "th" ? "เพิ่มลิมิต" : "Add Limit"}
+                    </Button>
+                  </div>
+                </div>
+
+                {!isAllLotteryTypes && (
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "เลือกประเภทหวย" : "Select Lottery Types"}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {lotteryTypes.map((type) => (
+                        <Badge
+                          key={type}
+                          variant={limitLotteryTypes.includes(type) ? "default" : "outline"}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            if (limitLotteryTypes.includes(type)) {
+                              setLimitLotteryTypes(limitLotteryTypes.filter(t => t !== type));
+                            } else {
+                              setLimitLotteryTypes([...limitLotteryTypes, type]);
+                            }
+                          }}
+                          data-testid={`badge-lottery-type-${type}`}
+                        >
+                          {lotteryTypeNames[type][language]}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  {language === "th" ? "รายการลิมิต" : "Betting Limits"}
+                  <Badge variant="secondary">{betLimits.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingBetLimits ? (
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : betLimits.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{language === "th" ? "ยังไม่มีลิมิตยอดแทง" : "No betting limits set"}</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{language === "th" ? "เลข" : "Number"}</TableHead>
+                        <TableHead>{language === "th" ? "ยอดสูงสุด" : "Max Amount"}</TableHead>
+                        <TableHead>{language === "th" ? "ใช้กับหวย" : "Lottery Types"}</TableHead>
+                        <TableHead>{language === "th" ? "สถานะ" : "Status"}</TableHead>
+                        <TableHead className="text-right">{language === "th" ? "จัดการ" : "Actions"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {betLimits.map((limit) => (
+                        <TableRow key={limit.id} data-testid={`row-limit-${limit.id}`}>
+                          <TableCell className="font-mono font-bold text-lg">{limit.number}</TableCell>
+                          <TableCell className="font-bold text-amber-600">
+                            {limit.maxAmount.toLocaleString()} ฿
+                          </TableCell>
+                          <TableCell>
+                            {limit.lotteryTypes.length === 0 ? (
+                              <Badge variant="secondary">
+                                {language === "th" ? "ทุกหวย" : "All"}
+                              </Badge>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {limit.lotteryTypes.slice(0, 3).map((type) => (
+                                  <Badge key={type} variant="outline" className="text-xs">
+                                    {lotteryTypeNames[type as LotteryType]?.[language] || type}
+                                  </Badge>
+                                ))}
+                                {limit.lotteryTypes.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{limit.lotteryTypes.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={limit.isActive}
+                              onCheckedChange={(checked) => 
+                                updateBetLimitMutation.mutate({ id: limit.id, isActive: checked })
+                              }
+                              disabled={updateBetLimitMutation.isPending}
+                              data-testid={`switch-limit-status-${limit.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteBetLimitMutation.mutate(limit.id)}
+                              disabled={deleteBetLimitMutation.isPending}
+                              data-testid={`button-delete-limit-${limit.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>
