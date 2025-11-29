@@ -177,8 +177,22 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Missing required fields" });
       }
 
+      const user = await storage.getUser(userIdNum);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const totalAmount = items.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+      
+      if (user.balance < totalAmount) {
+        return res.status(400).json({ 
+          error: "Insufficient balance",
+          required: totalAmount,
+          available: user.balance
+        });
+      }
+
       const createdBets = [];
-      let totalAmount = 0;
 
       for (const item of items) {
         const { lotteryType, betType, numbers, amount } = item;
@@ -219,7 +233,6 @@ export async function registerRoutes(
         });
 
         createdBets.push(bet);
-        totalAmount += amount;
       }
 
       await storage.updateUserBalance(userIdNum, -totalAmount);
@@ -235,7 +248,6 @@ export async function registerRoutes(
 
       await storage.updateAffiliateStats(userIdNum, totalAmount);
 
-      const user = await storage.getUser(userIdNum);
       const username = user?.username || `User #${userIdNum}`;
       const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || undefined;
       

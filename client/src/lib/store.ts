@@ -48,6 +48,7 @@ interface UserState {
   user: User | null;
   isAuthenticated: boolean;
   setUser: (user: User | null) => void;
+  updateBalance: (newBalance: number) => void;
   logout: () => void;
 }
 
@@ -57,6 +58,9 @@ export const useUser = create<UserState>()(
       user: null,
       isAuthenticated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
+      updateBalance: (newBalance) => set((state) => ({
+        user: state.user ? { ...state.user, balance: newBalance } : null
+      })),
       logout: () => set({ user: null, isAuthenticated: false })
     }),
     {

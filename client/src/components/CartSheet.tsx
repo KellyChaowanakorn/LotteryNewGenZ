@@ -11,24 +11,82 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCart } from "@/lib/store";
+import { useCart, useUser } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { lotteryTypeNames, betTypeNames, payoutRates } from "@shared/schema";
-import { ShoppingCart, Trash2, X } from "lucide-react";
+import { ShoppingCart, Trash2, X, Wallet, CreditCard, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { PaymentModal } from "./PaymentModal";
 
 export function CartSheet() {
   const { language, t } = useI18n();
   const { items, removeItem, clearCart, getTotal, getTotalPotentialWin } = useCart();
+  const { user, updateBalance } = useUser();
+  const { toast } = useToast();
   const [showPayment, setShowPayment] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
   const total = getTotal();
   const potentialWin = getTotalPotentialWin();
+  const userBalance = user?.balance || 0;
+  const hasEnoughBalance = userBalance >= total;
+
+  const submitBetsMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Not logged in");
+      
+      const betItems = items.map(item => ({
+        lotteryType: item.lotteryType,
+        betType: item.betType,
+        numbers: item.numbers,
+        amount: item.amount
+      }));
+      
+      const res = await apiRequest("POST", "/api/bets", { 
+        userId: user.id,
+        items: betItems 
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}`] });
+      updateBalance(userBalance - total);
+      clearCart();
+      setIsOpen(false);
+      toast({
+        title: language === "th" ? "ซื้อหวยสำเร็จ!" : "Bet placed successfully!",
+        description: language === "th" 
+          ? `ตัดเงินจากยอดคงเหลือ ${total.toLocaleString()} บาท` 
+          : `${total.toLocaleString()} THB deducted from balance`
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
 
   const handleCheckout = () => {
-    if (items.length > 0) {
+    if (items.length === 0) return;
+    
+    if (!user?.id) {
+      toast({
+        title: language === "th" ? "กรุณาเข้าสู่ระบบ" : "Please login",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (hasEnoughBalance) {
+      submitBetsMutation.mutate();
+    } else {
       setShowPayment(true);
       setIsOpen(false);
     }
@@ -118,6 +176,25 @@ export function CartSheet() {
                     {potentialWin.toLocaleString()} {t("common.baht")}
                   </span>
                 </div>
+                {user && (
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Wallet className="h-4 w-4" />
+                      {language === "th" ? "ยอดคงเหลือ" : "Balance"}
+                    </span>
+                    <span className={`text-lg font-semibold ${hasEnoughBalance ? "text-green-600" : "text-orange-500"}`}>
+                      {userBalance.toLocaleString()} {t("common.baht")}
+                    </span>
+                  </div>
+                )}
+                {user && !hasEnoughBalance && total > 0 && (
+                  <p className="text-sm text-orange-500 text-center">
+                    {language === "th" 
+                      ? `ยอดไม่เพียงพอ ต้องเติมอีก ${(total - userBalance).toLocaleString()} บาท`
+                      : `Insufficient balance. Need ${(total - userBalance).toLocaleString()} THB more`
+                    }
+                  </p>
+                )}
               </div>
 
               <SheetFooter className="gap-2 sm:gap-2">
@@ -126,6 +203,7 @@ export function CartSheet() {
                   onClick={clearCart}
                   className="flex-1"
                   data-testid="button-clear-cart"
+                  disabled={submitBetsMutation.isPending}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   {t("cart.clear")}
@@ -133,9 +211,25 @@ export function CartSheet() {
                 <Button
                   onClick={handleCheckout}
                   className="flex-1"
+                  disabled={submitBetsMutation.isPending}
                   data-testid="button-checkout"
                 >
-                  {t("cart.checkout")}
+                  {submitBetsMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {language === "th" ? "กำลังซื้อ..." : "Processing..."}
+                    </>
+                  ) : hasEnoughBalance ? (
+                    <>
+                      <Wallet className="h-4 w-4 mr-2" />
+                      {language === "th" ? "ซื้อหวย" : "Buy Tickets"}
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {language === "th" ? "เติมเงิน" : "Top Up"}
+                    </>
+                  )}
                 </Button>
               </SheetFooter>
             </>

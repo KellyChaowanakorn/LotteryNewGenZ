@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
-import { useCart, useUser } from "@/lib/store";
+import { useUser } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
@@ -33,7 +33,6 @@ const bankAccount = {
 
 export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
   const { language, t } = useI18n();
-  const { items } = useCart();
   const { user } = useUser();
   const { toast } = useToast();
   const [copied, setCopied] = useState<string | null>(null);
@@ -54,20 +53,11 @@ export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
     mutationFn: async () => {
       const slipBase64 = slipFile ? await fileToBase64(slipFile) : null;
       
-      const cartItemsJson = JSON.stringify(items.map(item => ({
-        lotteryType: item.lotteryType,
-        betType: item.betType,
-        numbers: item.numbers,
-        amount: item.amount
-      })));
-      
       const res = await apiRequest("POST", "/api/transactions", {
         userId: user?.id,
         type: "deposit",
         amount: amount,
-        slipUrl: slipBase64,
-        reference: referenceNumber,
-        cartItems: cartItemsJson
+        slipUrl: slipBase64
       });
       return res.json();
     },
