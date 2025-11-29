@@ -254,3 +254,18 @@ export const bankAccountSchema = z.object({
 });
 
 export type BankAccount = z.infer<typeof bankAccountSchema>;
+
+export const payoutSettings = pgTable("payout_settings", {
+  id: serial("id").primaryKey(),
+  betType: text("bet_type").notNull().unique(),
+  rate: real("rate").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
+});
+
+export const insertPayoutSettingSchema = createInsertSchema(payoutSettings).omit({
+  id: true,
+  updatedAt: true
+});
+
+export type InsertPayoutSetting = z.infer<typeof insertPayoutSettingSchema>;
+export type PayoutSetting = typeof payoutSettings.$inferSelect;
