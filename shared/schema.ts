@@ -307,3 +307,18 @@ export type BetLimitLotteryType = typeof betLimitLotteryTypes.$inferSelect;
 export type BetLimitWithLotteryTypes = BetLimit & {
   lotteryTypes: string[];
 };
+
+export const betTypeSettings = pgTable("bet_type_settings", {
+  id: serial("id").primaryKey(),
+  betType: text("bet_type").notNull().unique(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
+});
+
+export const insertBetTypeSettingSchema = createInsertSchema(betTypeSettings).omit({
+  id: true,
+  updatedAt: true
+});
+
+export type InsertBetTypeSetting = z.infer<typeof insertBetTypeSettingSchema>;
+export type BetTypeSetting = typeof betTypeSettings.$inferSelect;
