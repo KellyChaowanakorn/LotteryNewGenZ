@@ -5,84 +5,168 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
-import { Calculator, Hash, DollarSign, Layers, Copy, Trash2, CheckCircle } from "lucide-react";
+import { useCart, useUser } from "@/lib/store";
+import { useLocation } from "wouter";
+import { 
+  Calculator, 
+  Hash, 
+  DollarSign, 
+  Layers, 
+  Plus, 
+  Trash2, 
+  ShoppingCart,
+  CheckCircle,
+  X
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  lotteryTypes, 
+  betTypes, 
+  lotteryTypeNames, 
+  betTypeNames,
+  type LotteryType,
+  type BetType 
+} from "@shared/schema";
 
-interface CalculationResult {
-  sets: string[][];
-  uniqueNumbers: string[];
-  totalSets: number;
-  totalAmount: number;
+interface NumberSet {
+  id: string;
+  numbers: string[];
 }
 
 export default function SetCalculator() {
   const { language } = useI18n();
   const { toast } = useToast();
-  const [numbersInput, setNumbersInput] = useState("");
-  const [pricePerSet, setPricePerSet] = useState("");
-  const [copied, setCopied] = useState(false);
+  const { addItem } = useCart();
+  const { isAuthenticated } = useUser();
+  const [, setLocation] = useLocation();
+  
+  const [sets, setSets] = useState<NumberSet[]>([]);
+  const [currentInput, setCurrentInput] = useState("");
+  const [pricePerNumber, setPricePerNumber] = useState("1");
+  const [lotteryType, setLotteryType] = useState<LotteryType>("THAI_GOV");
+  const [betType, setBetType] = useState<BetType>("TWO_TOP");
 
-  const result = useMemo<CalculationResult>(() => {
-    if (!numbersInput.trim()) {
-      return { sets: [], uniqueNumbers: [], totalSets: 0, totalAmount: 0 };
+  const parseNumbers = (input: string): string[] => {
+    return input
+      .split(/[,\s\n]+/)
+      .map(n => n.trim())
+      .filter(n => /^\d+$/.test(n));
+  };
+
+  const handleAddSet = () => {
+    const numbers = parseNumbers(currentInput);
+    if (numbers.length === 0) {
+      toast({
+        title: language === "th" ? "กรุณาใส่เลข" : "Please enter numbers",
+        variant: "destructive"
+      });
+      return;
     }
 
-    const lines = numbersInput.split(/\n/).filter(line => line.trim());
-    const sets: string[][] = [];
-    const allNumbers = new Set<string>();
+    const newSet: NumberSet = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      numbers
+    };
 
-    for (const line of lines) {
-      const numbers = line
-        .split(/[,\s]+/)
-        .map(n => n.trim())
-        .filter(n => /^\d+$/.test(n));
-      
-      if (numbers.length > 0) {
-        sets.push(numbers);
-        numbers.forEach(n => allNumbers.add(n));
-      }
-    }
+    setSets(prev => [...prev, newSet]);
+    setCurrentInput("");
+    
+    toast({
+      title: language === "th" ? `เพิ่มชุดที่ ${sets.length + 1} แล้ว` : `Added Set ${sets.length + 1}`,
+      description: language === "th" 
+        ? `${numbers.length} เลข: ${numbers.join(", ")}`
+        : `${numbers.length} numbers: ${numbers.join(", ")}`
+    });
+  };
 
-    const price = parseFloat(pricePerSet) || 0;
-    const uniqueNumbers = Array.from(allNumbers).sort((a, b) => {
+  const handleRemoveSet = (id: string) => {
+    setSets(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleClearAll = () => {
+    setSets([]);
+    setCurrentInput("");
+  };
+
+  const result = useMemo(() => {
+    const allNumbers: string[] = [];
+    sets.forEach(set => {
+      allNumbers.push(...set.numbers);
+    });
+
+    const uniqueNumbers = Array.from(new Set(allNumbers)).sort((a, b) => {
       if (a.length !== b.length) return a.length - b.length;
       return a.localeCompare(b);
     });
 
+    const price = parseFloat(pricePerNumber) || 0;
+    const totalNumbers = allNumbers.length;
+    const totalAmount = totalNumbers * price;
+
     return {
-      sets,
-      uniqueNumbers,
       totalSets: sets.length,
-      totalAmount: sets.length * price
+      totalNumbers,
+      uniqueCount: uniqueNumbers.length,
+      uniqueNumbers,
+      totalAmount
     };
-  }, [numbersInput, pricePerSet]);
+  }, [sets, pricePerNumber]);
 
-  const handleClear = () => {
-    setNumbersInput("");
-    setPricePerSet("");
-  };
-
-  const handleCopyNumbers = async () => {
-    if (result.uniqueNumbers.length === 0) return;
-    
-    try {
-      await navigator.clipboard.writeText(result.uniqueNumbers.join(", "));
-      setCopied(true);
+  const handleAddToCart = () => {
+    if (!isAuthenticated) {
       toast({
-        title: language === "th" ? "คัดลอกแล้ว" : "Copied",
-        description: language === "th" 
-          ? `คัดลอก ${result.uniqueNumbers.length} เลข` 
-          : `Copied ${result.uniqueNumbers.length} numbers`
-      });
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast({
-        title: language === "th" ? "ไม่สามารถคัดลอกได้" : "Failed to copy",
+        title: language === "th" ? "กรุณาเข้าสู่ระบบ" : "Please login",
+        description: language === "th" ? "คุณต้องเข้าสู่ระบบก่อนซื้อ" : "You need to login before purchasing",
         variant: "destructive"
       });
+      setLocation("/login");
+      return;
     }
+
+    if (sets.length === 0) {
+      toast({
+        title: language === "th" ? "ไม่มีเลขในชุด" : "No numbers in sets",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const price = parseFloat(pricePerNumber) || 0;
+    if (price <= 0) {
+      toast({
+        title: language === "th" ? "กรุณาใส่ราคาต่อเลข" : "Please enter price per number",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    let addedCount = 0;
+
+    sets.forEach(set => {
+      set.numbers.forEach(number => {
+        addItem({
+          lotteryType,
+          betType,
+          numbers: number,
+          amount: price
+        });
+        addedCount++;
+      });
+    });
+
+    toast({
+      title: language === "th" ? "เพิ่มลงตะกร้าแล้ว" : "Added to cart",
+      description: language === "th" 
+        ? `เพิ่ม ${addedCount} รายการ รวม ${result.totalAmount.toLocaleString()} บาท`
+        : `Added ${addedCount} items, total ${result.totalAmount.toLocaleString()} Baht`
+    });
+
+    handleClearAll();
   };
+
+  const currentNumbers = parseNumbers(currentInput);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -96,192 +180,284 @@ export default function SetCalculator() {
           </h1>
           <p className="text-muted-foreground mt-2">
             {language === "th" 
-              ? "คำนวณจำนวนชุด เลขที่ครอบคลุม และยอดรวม" 
-              : "Calculate sets, covered numbers, and total amount"}
+              ? "เพิ่มเลขเป็นชุด คำนวณยอด แล้วซื้อได้เลย" 
+              : "Add numbers in sets, calculate total, and purchase directly"}
           </p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Hash className="h-5 w-5" />
-                {language === "th" ? "ใส่เลขชุด" : "Enter Number Sets"}
-              </CardTitle>
-              <CardDescription>
-                {language === "th" 
-                  ? "ใส่เลขแต่ละชุดคั่นด้วย , หรือ ช่องว่าง หรือขึ้นบรรทัดใหม่" 
-                  : "Separate numbers with comma, space, or new line"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="numbers">
-                  {language === "th" ? "เลขชุด" : "Number Sets"}
-                </Label>
-                <Textarea
-                  id="numbers"
-                  placeholder={language === "th" 
-                    ? "ตัวอย่าง:\n123, 456, 789\n111 222 333\n555\n666, 777" 
-                    : "Example:\n123, 456, 789\n111 222 333\n555\n666, 777"}
-                  value={numbersInput}
-                  onChange={(e) => setNumbersInput(e.target.value)}
-                  className="min-h-[200px] font-mono"
-                  data-testid="textarea-numbers"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="price">
-                  {language === "th" ? "ราคาต่อชุด (บาท)" : "Price per Set (Baht)"}
-                </Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={pricePerSet}
-                    onChange={(e) => setPricePerSet(e.target.value)}
-                    className="pl-10"
-                    data-testid="input-price"
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Hash className="h-5 w-5" />
+                  {language === "th" ? "เพิ่มชุดใหม่" : "Add New Set"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" 
+                    ? `ชุดที่ ${sets.length + 1} - ใส่เลขคั่นด้วย , หรือ ช่องว่าง` 
+                    : `Set ${sets.length + 1} - Separate numbers with comma or space`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="numbers">
+                    {language === "th" ? "ใส่เลข" : "Enter Numbers"}
+                  </Label>
+                  <Textarea
+                    id="numbers"
+                    placeholder={language === "th" 
+                      ? "ตัวอย่าง: 12, 34, 56, 78" 
+                      : "Example: 12, 34, 56, 78"}
+                    value={currentInput}
+                    onChange={(e) => setCurrentInput(e.target.value)}
+                    className="min-h-[100px] font-mono"
+                    data-testid="textarea-numbers"
                   />
-                </div>
-              </div>
-
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleClear}
-                data-testid="button-clear"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                {language === "th" ? "ล้างข้อมูล" : "Clear"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5" />
-                {language === "th" ? "ผลการคำนวณ" : "Calculation Result"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="bg-primary/5 border-primary/20">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {language === "th" ? "จำนวนชุด" : "Total Sets"}
-                    </p>
-                    <p className="text-3xl font-bold text-primary" data-testid="text-total-sets">
-                      {result.totalSets}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-accent/50 border-accent">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {language === "th" ? "เลขไม่ซ้ำ" : "Unique Numbers"}
-                    </p>
-                    <p className="text-3xl font-bold text-accent-foreground" data-testid="text-unique-count">
-                      {result.uniqueNumbers.length}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="bg-green-500/10 border-green-500/30">
-                <CardContent className="p-4 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {language === "th" ? "ยอดรวมทั้งหมด" : "Total Amount"}
-                  </p>
-                  <p className="text-4xl font-bold text-green-600 dark:text-green-400" data-testid="text-total-amount">
-                    {result.totalAmount.toLocaleString()} ฿
-                  </p>
-                  {result.totalSets > 0 && pricePerSet && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {result.totalSets} {language === "th" ? "ชุด" : "sets"} × {parseFloat(pricePerSet).toLocaleString()} ฿
+                  {currentNumbers.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {language === "th" 
+                        ? `พบ ${currentNumbers.length} เลข: ${currentNumbers.join(", ")}`
+                        : `Found ${currentNumbers.length} numbers: ${currentNumbers.join(", ")}`}
                     </p>
                   )}
-                </CardContent>
-              </Card>
+                </div>
 
-              {result.uniqueNumbers.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>
-                      {language === "th" ? "เลขที่ครอบคลุม (ไม่ซ้ำ)" : "Covered Numbers (Unique)"}
-                    </Label>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleCopyNumbers}
-                      data-testid="button-copy-numbers"
-                    >
-                      {copied ? (
-                        <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4 mr-1" />
-                      )}
-                      {language === "th" ? "คัดลอก" : "Copy"}
-                    </Button>
+                <Button 
+                  className="w-full" 
+                  onClick={handleAddSet}
+                  disabled={currentNumbers.length === 0}
+                  data-testid="button-add-set"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {language === "th" ? `เพิ่มชุดที่ ${sets.length + 1}` : `Add Set ${sets.length + 1}`}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  {language === "th" ? "ชุดที่เพิ่มแล้ว" : "Added Sets"}
+                  {sets.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {sets.length} {language === "th" ? "ชุด" : "sets"}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {sets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {language === "th" ? "ยังไม่มีชุด กรุณาเพิ่มชุดใหม่" : "No sets yet. Please add a new set."}
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {sets.map((set, idx) => (
+                      <div 
+                        key={set.id} 
+                        className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg group"
+                        data-testid={`row-set-${idx}`}
+                      >
+                        <Badge variant="outline" className="shrink-0">
+                          {language === "th" ? `ชุด ${idx + 1}` : `Set ${idx + 1}`}
+                        </Badge>
+                        <span className="font-mono text-sm flex-1 truncate">
+                          {set.numbers.join(", ")}
+                        </span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {set.numbers.length} {language === "th" ? "เลข" : "nos"}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleRemoveSet(set.id)}
+                          data-testid={`button-remove-set-${idx}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex flex-wrap gap-2 max-h-[200px] overflow-y-auto p-2 bg-muted/30 rounded-lg">
+                )}
+
+                {sets.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    className="w-full mt-4" 
+                    onClick={handleClearAll}
+                    data-testid="button-clear-all"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {language === "th" ? "ล้างทั้งหมด" : "Clear All"}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  {language === "th" ? "ตั้งค่าการซื้อ" : "Purchase Settings"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "ประเภทหวย" : "Lottery Type"}</Label>
+                    <Select value={lotteryType} onValueChange={(v) => setLotteryType(v as LotteryType)}>
+                      <SelectTrigger data-testid="select-lottery-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lotteryTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {lotteryTypeNames[type][language]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "ประเภทแทง" : "Bet Type"}</Label>
+                    <Select value={betType} onValueChange={(v) => setBetType(v as BetType)}>
+                      <SelectTrigger data-testid="select-bet-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {betTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {betTypeNames[type][language]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="price">
+                    {language === "th" ? "ราคาต่อเลข (บาท)" : "Price per Number (Baht)"}
+                  </Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="price"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={pricePerNumber}
+                      onChange={(e) => setPricePerNumber(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-price"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {language === "th" ? "สรุปยอด" : "Summary"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="bg-primary/5 border-primary/20">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {language === "th" ? "จำนวนชุด" : "Total Sets"}
+                      </p>
+                      <p className="text-2xl font-bold text-primary" data-testid="text-total-sets">
+                        {result.totalSets}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-accent/50 border-accent">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {language === "th" ? "จำนวนเลข" : "Total Numbers"}
+                      </p>
+                      <p className="text-2xl font-bold text-accent-foreground" data-testid="text-total-numbers">
+                        {result.totalNumbers}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="bg-green-500/10 border-green-500/30">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      {language === "th" ? "ยอดรวมทั้งหมด" : "Total Amount"}
+                    </p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-total-amount">
+                      {result.totalAmount.toLocaleString()} ฿
+                    </p>
+                    {result.totalNumbers > 0 && pricePerNumber && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {result.totalNumbers} {language === "th" ? "เลข" : "numbers"} × {parseFloat(pricePerNumber).toLocaleString()} ฿
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Button 
+                  className="w-full h-12 text-lg"
+                  onClick={handleAddToCart}
+                  disabled={sets.length === 0 || result.totalAmount <= 0}
+                  data-testid="button-add-to-cart"
+                >
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  {language === "th" ? "เพิ่มลงตะกร้า" : "Add to Cart"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {result.uniqueNumbers.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>{language === "th" ? "เลขทั้งหมด (ไม่ซ้ำ)" : "All Numbers (Unique)"}</span>
+                    <Badge variant="outline">{result.uniqueCount}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto">
                     {result.uniqueNumbers.map((num, idx) => (
                       <Badge 
                         key={idx} 
                         variant="secondary"
-                        className="font-mono text-sm"
+                        className="font-mono text-xs"
                         data-testid={`badge-number-${idx}`}
                       >
                         {num}
                       </Badge>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {result.sets.length > 0 && (
-                <div className="space-y-3">
-                  <Label>
-                    {language === "th" ? "รายละเอียดแต่ละชุด" : "Set Details"}
-                  </Label>
-                  <div className="space-y-2 max-h-[150px] overflow-y-auto">
-                    {result.sets.map((set, idx) => (
-                      <div 
-                        key={idx} 
-                        className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg"
-                        data-testid={`row-set-${idx}`}
-                      >
-                        <Badge variant="outline" className="shrink-0">
-                          {language === "th" ? `ชุดที่ ${idx + 1}` : `Set ${idx + 1}`}
-                        </Badge>
-                        <span className="font-mono text-sm">
-                          {set.join(", ")}
-                        </span>
-                        <span className="text-muted-foreground text-sm ml-auto">
-                          ({set.length} {language === "th" ? "เลข" : "numbers"})
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
 
         <Card className="bg-muted/30">
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {language === "th" 
-                ? "💡 เคล็ดลับ: ใส่เลขแต่ละชุดในบรรทัดใหม่ หรือคั่นด้วยคอมม่า (,) หรือช่องว่าง ระบบจะคำนวณให้อัตโนมัติ" 
-                : "💡 Tip: Enter each set on a new line, or separate with commas (,) or spaces. The system will calculate automatically."}
-            </p>
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                {language === "th" 
+                  ? "วิธีใช้: พิมพ์เลขชุดแรก กดปุ่ม \"เพิ่มชุดที่ 1\" → พิมพ์เลขชุดถัดไป กดปุ่ม \"เพิ่มชุดที่ 2\" → ทำซ้ำจนครบ → ตั้งราคาต่อเลข → กดปุ่ม \"เพิ่มลงตะกร้า\" เพื่อซื้อ" 
+                  : "How to use: Enter first set numbers, click \"Add Set 1\" → Enter next set, click \"Add Set 2\" → Repeat → Set price per number → Click \"Add to Cart\" to purchase"}
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
