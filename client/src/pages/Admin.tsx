@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,8 +43,25 @@ import {
   Clock,
   BarChart3,
   UserX,
-  UserCheck
+  UserCheck,
+  LineChart,
+  PieChart
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart as RechartsPie,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  Legend
+} from "recharts";
 
 type UserWithoutPassword = Omit<User, "password">;
 
@@ -233,6 +250,99 @@ export default function Admin() {
     return user?.username || `User #${userId}`;
   };
 
+  const chartColors = [
+    "hsl(var(--primary))",
+    "hsl(var(--chart-2))",
+    "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))",
+    "hsl(var(--chart-5))",
+    "#10B981",
+    "#F59E0B",
+    "#EF4444",
+    "#8B5CF6",
+    "#EC4899",
+    "#14B8A6",
+    "#F97316"
+  ];
+
+  const bettingByLotteryData = useMemo(() => {
+    const grouped: Record<string, { amount: number; count: number }> = {};
+    allBets.forEach(bet => {
+      if (!grouped[bet.lotteryType]) {
+        grouped[bet.lotteryType] = { amount: 0, count: 0 };
+      }
+      grouped[bet.lotteryType].amount += bet.amount;
+      grouped[bet.lotteryType].count += 1;
+    });
+    return Object.entries(grouped).map(([type, data]) => ({
+      name: lotteryTypeNames[type as LotteryType]?.[language] || type,
+      value: data.amount,
+      count: data.count
+    }));
+  }, [allBets, language]);
+
+  const betTypeDistribution = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    allBets.forEach(bet => {
+      grouped[bet.betType] = (grouped[bet.betType] || 0) + bet.amount;
+    });
+    return Object.entries(grouped).map(([type, amount]) => ({
+      name: betTypeNames[type as BetType]?.[language] || type,
+      value: amount
+    }));
+  }, [allBets, language]);
+
+  const hotNumbers = useMemo(() => {
+    const numberCounts: Record<string, number> = {};
+    allBets.forEach(bet => {
+      if (!numberCounts[bet.numbers]) {
+        numberCounts[bet.numbers] = 0;
+      }
+      numberCounts[bet.numbers]++;
+    });
+    return Object.entries(numberCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([number, count]) => ({
+        number,
+        count
+      }));
+  }, [allBets]);
+
+  const dailyBettingData = useMemo(() => {
+    const dailyData: Record<string, { date: string; amount: number; count: number }> = {};
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      last7Days.push(dateStr);
+      dailyData[dateStr] = { date: dateStr, amount: 0, count: 0 };
+    }
+    allBets.forEach(bet => {
+      const betDate = new Date(bet.createdAt).toISOString().split('T')[0];
+      if (dailyData[betDate]) {
+        dailyData[betDate].amount += bet.amount;
+        dailyData[betDate].count += 1;
+      }
+    });
+    return last7Days.map(date => ({
+      ...dailyData[date],
+      displayDate: new Date(date).toLocaleDateString(language === "th" ? "th-TH" : "en-US", { weekday: 'short', day: 'numeric' })
+    }));
+  }, [allBets, language]);
+
+  const affiliatePerformance = useMemo(() => {
+    return allUsers
+      .filter(u => u.affiliateEarnings > 0)
+      .sort((a, b) => b.affiliateEarnings - a.affiliateEarnings)
+      .slice(0, 10)
+      .map(user => ({
+        username: user.username,
+        earnings: user.affiliateEarnings
+      }));
+  }, [allUsers]);
+
   return (
     <div className="min-h-full">
       <div className="bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4 md:p-6 border-b border-border">
@@ -303,7 +413,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm">
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Transactions"}</span>
@@ -316,6 +426,10 @@ export default function Admin() {
             <TabsTrigger value="users" className="gap-1 text-xs sm:text-sm">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ผู้ใช้" : "Users"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1 text-xs sm:text-sm">
+              <LineChart className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === "th" ? "วิเคราะห์" : "Analytics"}</span>
             </TabsTrigger>
             <TabsTrigger value="bets" className="gap-1 text-xs sm:text-sm">
               <BarChart3 className="h-4 w-4" />
@@ -478,6 +592,210 @@ export default function Admin() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    {language === "th" ? "ยอดแทงรายวัน (7 วัน)" : "Daily Betting (7 Days)"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {dailyBettingData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={dailyBettingData}>
+                        <defs>
+                          <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="displayDate" className="text-xs" tick={{fill: 'hsl(var(--muted-foreground))'}} />
+                        <YAxis className="text-xs" tick={{fill: 'hsl(var(--muted-foreground))'}} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [`${value.toLocaleString()} ฿`, language === "th" ? "ยอดแทง" : "Amount"]}
+                        />
+                        <Area type="monotone" dataKey="amount" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorAmount)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      {language === "th" ? "ไม่มีข้อมูล" : "No data available"}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    {language === "th" ? "ยอดแทงตามหวย" : "Betting by Lottery"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {bettingByLotteryData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <RechartsPie>
+                        <Pie
+                          data={bettingByLotteryData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {bettingByLotteryData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [`${value.toLocaleString()} ฿`, language === "th" ? "ยอดแทง" : "Amount"]}
+                        />
+                        <Legend />
+                      </RechartsPie>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      {language === "th" ? "ไม่มีข้อมูล" : "No data available"}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    {language === "th" ? "เลขฮอต Top 10" : "Hot Numbers Top 10"}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === "th" ? "เลขที่มีคนแทงมากที่สุด" : "Most frequently bet numbers"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {hotNumbers.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={hotNumbers} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis type="number" tick={{fill: 'hsl(var(--muted-foreground))'}} />
+                        <YAxis 
+                          type="category" 
+                          dataKey="number" 
+                          tick={{fill: 'hsl(var(--muted-foreground))', fontFamily: 'monospace', fontWeight: 'bold'}} 
+                          width={60}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [value, language === "th" ? "จำนวนครั้ง" : "Count"]}
+                        />
+                        <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      {language === "th" ? "ไม่มีข้อมูล" : "No data available"}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    {language === "th" ? "ยอดแทงตามประเภท" : "Betting by Type"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {betTypeDistribution.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={betTypeDistribution}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis 
+                          dataKey="name" 
+                          tick={{fill: 'hsl(var(--muted-foreground))', fontSize: 10}} 
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis tick={{fill: 'hsl(var(--muted-foreground))'}} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [`${value.toLocaleString()} ฿`, language === "th" ? "ยอดแทง" : "Amount"]}
+                        />
+                        <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      {language === "th" ? "ไม่มีข้อมูล" : "No data available"}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  {language === "th" ? "Affiliate ยอดสูงสุด" : "Top Affiliates"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" ? "รายได้คอมมิชชั่นสูงสุด 10 อันดับ" : "Top 10 commission earners"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {affiliatePerformance.length > 0 ? (
+                  <div className="space-y-3">
+                    {affiliatePerformance.map((affiliate, index) => (
+                      <div key={affiliate.username} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
+                            #{index + 1}
+                          </div>
+                          <span className="font-medium">{affiliate.username}</span>
+                        </div>
+                        <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                          +{affiliate.earnings.toLocaleString()} ฿
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{language === "th" ? "ยังไม่มี Affiliate ที่ได้รับคอมมิชชั่น" : "No affiliates with commissions yet"}</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
