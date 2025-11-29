@@ -296,6 +296,21 @@ export async function registerRoutes(
           return res.status(400).json({ error: `Number ${numbers} is blocked` });
         }
 
+        const drawDate = new Date().toISOString().split("T")[0];
+        
+        const betLimit = await storage.getActiveBetLimitForNumber(numbers, lotteryType);
+        if (betLimit) {
+          const existingTotal = await storage.getTotalBetAmountForNumber(numbers, lotteryType, drawDate);
+          const newTotal = existingTotal + amount;
+          
+          if (newTotal > betLimit.maxAmount) {
+            const remaining = Math.max(0, betLimit.maxAmount - existingTotal);
+            return res.status(400).json({ 
+              error: `Bet limit exceeded for ${numbers}. Max: ${betLimit.maxAmount.toLocaleString()}฿, Current: ${existingTotal.toLocaleString()}฿, Remaining: ${remaining.toLocaleString()}฿`
+            });
+          }
+        }
+
         betInserts.push({
           userId: userIdNum,
           lotteryType,
@@ -304,7 +319,7 @@ export async function registerRoutes(
           amount,
           potentialWin,
           status: "pending",
-          drawDate: new Date().toISOString().split("T")[0],
+          drawDate,
         });
       }
 
