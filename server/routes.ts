@@ -314,17 +314,31 @@ export async function registerRoutes(
 
   app.post("/api/confirm_payment", async (req, res) => {
     try {
-      const { user_name = "ไม่ระบุ", amount = "ไม่ระบุ" } = req.body;
-      const timestamp = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
-      const message = `🚨 <b>โอนเงินใหม่!</b>\n👤 ${user_name}\n💰 ${amount} บาท\n⏰ ${timestamp}`;
-      const success = await sendTelegramMessage(message);
-      if (success) {
-        res.json({ status: "success" });
+      const { user_name = "ผู้ใช้ไม่ระบุ", amount = "ไม่ระบุ", type = "ไม่ระบุ" } = req.body;
+      
+      let action = "";
+      if (type === "deposit") {
+        action = `👤 ${user_name} โอนเงินเข้า`;
+      } else if (type === "withdrawal") {
+        action = `👤 ${user_name} ถอนเงินออก`;
       } else {
-        res.status(500).json({ status: "error" });
+        action = `👤 ${user_name} ทำรายการ (ประเภท: ${type})`;
+      }
+      
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "ไม่ทราบ";
+      const timestamp = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+      const message = `🚨 <b>แจ้งเตือนรายการใหม่!</b>\n${action}\n💰 จำนวน: ${amount} บาท\n⏰ เวลา: ${timestamp}\n📍 IP: ${clientIp}`;
+      
+      const success = await sendTelegramMessage(message);
+      
+      if (success) {
+        res.json({ status: "success", message: "แจ้งเตือนส่งแล้ว!" });
+      } else {
+        res.status(500).json({ status: "error", message: "ส่งล้มเหลว" });
       }
     } catch (error) {
-      res.status(500).json({ status: "error" });
+      console.error("Error:", error);
+      res.status(500).json({ status: "error", message: "เกิดข้อผิดพลาด" });
     }
   });
 
