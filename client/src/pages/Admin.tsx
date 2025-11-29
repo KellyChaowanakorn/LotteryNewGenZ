@@ -185,6 +185,39 @@ export default function Admin() {
     enabled: isAdminAuthenticated,
   });
 
+  interface BetTypeSetting {
+    id: number;
+    betType: string;
+    isEnabled: boolean;
+    updatedAt: string;
+  }
+
+  const { data: betTypeSettings = [], isLoading: isLoadingBetTypeSettings } = useQuery<BetTypeSetting[]>({
+    queryKey: ["/api/bet-type-settings"],
+    enabled: isAdminAuthenticated,
+  });
+
+  const updateBetTypeSettingMutation = useMutation({
+    mutationFn: async ({ betType, isEnabled }: { betType: string; isEnabled: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/bet-type-settings/${betType}`, { isEnabled });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bet-type-settings"] });
+      toast({
+        title: variables.isEnabled
+          ? (language === "th" ? "เปิดรับแทงประเภทนี้แล้ว" : "Bet type enabled")
+          : (language === "th" ? "ปิดรับแทงประเภทนี้แล้ว" : "Bet type disabled")
+      });
+    },
+    onError: () => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+
   const addBlockedMutation = useMutation({
     mutationFn: async (data: { lotteryType: string; number: string; betType: string | null }) => {
       const res = await apiRequest("POST", "/api/blocked-numbers", data);
@@ -710,7 +743,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm">
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>
@@ -743,6 +776,10 @@ export default function Admin() {
             <TabsTrigger value="limits" className="gap-1 text-xs sm:text-sm">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ลิมิต" : "Limits"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="bet-types" className="gap-1 text-xs sm:text-sm">
+              <Play className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === "th" ? "ประเภท" : "Types"}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1869,6 +1906,102 @@ export default function Admin() {
                     </TableBody>
                   </Table>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="bet-types" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Play className="h-5 w-5" />
+                  {language === "th" ? "เปิด-ปิด ประเภทการแทง" : "Enable/Disable Bet Types"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" 
+                    ? "เปิดหรือปิดรับแทงแต่ละประเภททั่วทั้งระบบ ทุกหวย" 
+                    : "Enable or disable betting for each bet type globally across all lotteries"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBetTypeSettings ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {betTypes.map((type) => {
+                      const setting = betTypeSettings.find(s => s.betType === type);
+                      const isEnabled = setting?.isEnabled ?? true;
+                      
+                      return (
+                        <Card 
+                          key={type} 
+                          className={`transition-all ${isEnabled ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5 opacity-70'}`}
+                          data-testid={`card-bet-type-${type}`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <p className="font-medium">{betTypeNames[type][language]}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {isEnabled 
+                                    ? (language === "th" ? "กำลังรับแทง" : "Accepting bets")
+                                    : (language === "th" ? "ปิดรับแทง" : "Not accepting bets")
+                                  }
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={isEnabled}
+                                  onCheckedChange={(checked) => 
+                                    updateBetTypeSettingMutation.mutate({ betType: type, isEnabled: checked })
+                                  }
+                                  disabled={updateBetTypeSettingMutation.isPending}
+                                  data-testid={`switch-bet-type-${type}`}
+                                />
+                                {isEnabled ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-5 w-5 text-red-500" />
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  {language === "th" ? "สถานะปัจจุบัน" : "Current Status"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {betTypes.map((type) => {
+                    const setting = betTypeSettings.find(s => s.betType === type);
+                    const isEnabled = setting?.isEnabled ?? true;
+                    
+                    return (
+                      <Badge 
+                        key={type}
+                        variant={isEnabled ? "default" : "destructive"}
+                        className="text-sm"
+                      >
+                        {betTypeNames[type][language]}: {isEnabled ? (language === "th" ? "เปิด" : "ON") : (language === "th" ? "ปิด" : "OFF")}
+                      </Badge>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
