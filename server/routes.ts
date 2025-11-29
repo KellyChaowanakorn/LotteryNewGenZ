@@ -20,6 +20,16 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.session?.isAdmin) {
+      return res.status(401).json({ error: "Admin authentication required" });
+    }
+    next();
+  };
+
   app.get("/api/blocked-numbers", async (req, res) => {
     try {
       const lotteryType = req.query.lotteryType as string | undefined;
@@ -30,7 +40,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/blocked-numbers", async (req, res) => {
+  app.post("/api/blocked-numbers", requireAdmin, async (req, res) => {
     try {
       const { lotteryType, number, betType, isActive = true } = req.body;
       if (!lotteryType || !number) {
@@ -48,7 +58,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/blocked-numbers/:id", async (req, res) => {
+  app.patch("/api/blocked-numbers/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -65,7 +75,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/blocked-numbers/:id", async (req, res) => {
+  app.delete("/api/blocked-numbers/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -337,16 +347,6 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch affiliates" });
     }
   });
-
-  const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-
-  const requireAdmin = (req: any, res: any, next: any) => {
-    if (!req.session?.isAdmin) {
-      return res.status(401).json({ error: "Admin authentication required" });
-    }
-    next();
-  };
 
   app.post("/api/admin/login", async (req, res) => {
     const { username, password } = req.body;

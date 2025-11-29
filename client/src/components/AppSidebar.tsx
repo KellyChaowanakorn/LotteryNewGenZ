@@ -47,10 +47,6 @@ export function AppSidebar() {
       ]
     : [];
 
-  const adminMenuItem = isAdminAuthenticated
-    ? [{ title: t("nav.admin"), url: "/admin", icon: Settings }]
-    : [{ title: t("admin.login"), url: "/admin/login", icon: Settings }];
-
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
@@ -105,27 +101,28 @@ export function AppSidebar() {
           </>
         )}
 
-        <SidebarSeparator />
-
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminMenuItem.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.startsWith("/admin")}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isAdminAuthenticated && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location.startsWith("/admin")}
+                    >
+                      <Link href="/admin">
+                        <Settings className="h-4 w-4" />
+                        <span>{t("nav.admin")}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4 space-y-4">
