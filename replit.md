@@ -133,3 +133,17 @@ Preferred communication style: Simple, everyday language.
 - User IDs are now integers (serial primary key) instead of strings
 - Added proper foreign key relationships between tables
 - Affiliate system properly tracks referrals and calculates 20% commission on bets
+
+### Password Security Update (Nov 29, 2025)
+- Implemented secure password hashing using Node.js crypto module (scrypt algorithm)
+- New passwords are stored as `salt:hash` format with 32-byte salt and 64-byte key
+- Login verification uses timing-safe comparison to prevent timing attacks
+- Backward compatible: old plaintext passwords still work for existing users
+- New file: server/password.ts with hashPassword() and verifyPassword() functions
+
+### Lottery Results Page Enhancement (Nov 29, 2025)
+- Thai Government lottery: Live API integration from rayriffy.com
+- External links for all 12 lottery types to official/trusted result sources:
+  - Thai Stock: SET.or.th (ตลาดหลักทรัพย์แห่งประเทศไทย)
+  - International stocks: Investing.com
+  - Regional lotteries: Official lottery sites

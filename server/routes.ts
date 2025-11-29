@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { hashPassword, verifyPassword } from "./password";
 
 const payoutRates: Record<string, number> = {
   THREE_TOP: 900,
@@ -100,9 +101,11 @@ export async function registerRoutes(
         }
       }
 
+      const hashedPassword = await hashPassword(password);
+
       const user = await storage.createUser({
         username,
-        password,
+        password: hashedPassword,
         balance: 0,
         referralCode: `QNQ${Date.now().toString(36).toUpperCase()}`,
         referredBy,
@@ -132,7 +135,12 @@ export async function registerRoutes(
       }
 
       const user = await storage.getUserByUsername(username);
-      if (!user || user.password !== password) {
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const isValid = await verifyPassword(password, user.password);
+      if (!isValid) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
