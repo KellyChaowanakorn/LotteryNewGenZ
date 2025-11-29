@@ -44,7 +44,7 @@ export default function SetCalculator() {
   
   const [sets, setSets] = useState<NumberSet[]>([]);
   const [currentInput, setCurrentInput] = useState("");
-  const [pricePerNumber, setPricePerNumber] = useState("1");
+  const [pricePerSet, setPricePerSet] = useState("1");
   const [lotteryType, setLotteryType] = useState<LotteryType>("THAI_GOV");
   const [betType, setBetType] = useState<BetType>("TWO_TOP");
 
@@ -101,9 +101,9 @@ export default function SetCalculator() {
       return a.localeCompare(b);
     });
 
-    const price = parseFloat(pricePerNumber) || 0;
+    const price = parseFloat(pricePerSet) || 0;
     const totalNumbers = allNumbers.length;
-    const totalAmount = totalNumbers * price;
+    const totalAmount = sets.length * price;
 
     return {
       totalSets: sets.length,
@@ -112,7 +112,7 @@ export default function SetCalculator() {
       uniqueNumbers,
       totalAmount
     };
-  }, [sets, pricePerNumber]);
+  }, [sets, pricePerSet]);
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
@@ -133,34 +133,29 @@ export default function SetCalculator() {
       return;
     }
 
-    const price = parseFloat(pricePerNumber) || 0;
+    const price = parseFloat(pricePerSet) || 0;
     if (price <= 0) {
       toast({
-        title: language === "th" ? "กรุณาใส่ราคาต่อเลข" : "Please enter price per number",
+        title: language === "th" ? "กรุณาใส่ราคาต่อชุด" : "Please enter price per set",
         variant: "destructive"
       });
       return;
     }
 
-    let addedCount = 0;
-
-    sets.forEach(set => {
-      set.numbers.forEach(number => {
-        addItem({
-          lotteryType,
-          betType,
-          numbers: number,
-          amount: price
-        });
-        addedCount++;
+    sets.forEach((set, idx) => {
+      addItem({
+        lotteryType,
+        betType,
+        numbers: set.numbers.join(","),
+        amount: price
       });
     });
 
     toast({
       title: language === "th" ? "เพิ่มลงตะกร้าแล้ว" : "Added to cart",
       description: language === "th" 
-        ? `เพิ่ม ${addedCount} รายการ รวม ${result.totalAmount.toLocaleString()} บาท`
-        : `Added ${addedCount} items, total ${result.totalAmount.toLocaleString()} Baht`
+        ? `เพิ่ม ${sets.length} ชุด รวม ${result.totalAmount.toLocaleString()} บาท`
+        : `Added ${sets.length} sets, total ${result.totalAmount.toLocaleString()} Baht`
     });
 
     handleClearAll();
@@ -343,7 +338,7 @@ export default function SetCalculator() {
 
                 <div className="space-y-2">
                   <Label htmlFor="price">
-                    {language === "th" ? "ราคาต่อเลข (บาท)" : "Price per Number (Baht)"}
+                    {language === "th" ? "ราคาต่อชุด (บาท)" : "Price per Set (Baht)"}
                   </Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -352,8 +347,8 @@ export default function SetCalculator() {
                       type="number"
                       min="1"
                       placeholder="1"
-                      value={pricePerNumber}
-                      onChange={(e) => setPricePerNumber(e.target.value)}
+                      value={pricePerSet}
+                      onChange={(e) => setPricePerSet(e.target.value)}
                       className="pl-10"
                       data-testid="input-price"
                     />
@@ -401,9 +396,9 @@ export default function SetCalculator() {
                     <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-total-amount">
                       {result.totalAmount.toLocaleString()} ฿
                     </p>
-                    {result.totalNumbers > 0 && pricePerNumber && (
+                    {result.totalSets > 0 && pricePerSet && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {result.totalNumbers} {language === "th" ? "เลข" : "numbers"} × {parseFloat(pricePerNumber).toLocaleString()} ฿
+                        {result.totalSets} {language === "th" ? "ชุด" : "sets"} × {parseFloat(pricePerSet).toLocaleString()} ฿
                       </p>
                     )}
                   </CardContent>
@@ -454,8 +449,8 @@ export default function SetCalculator() {
               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
                 {language === "th" 
-                  ? "วิธีใช้: พิมพ์เลขชุดแรก กดปุ่ม \"เพิ่มชุดที่ 1\" → พิมพ์เลขชุดถัดไป กดปุ่ม \"เพิ่มชุดที่ 2\" → ทำซ้ำจนครบ → ตั้งราคาต่อเลข → กดปุ่ม \"เพิ่มลงตะกร้า\" เพื่อซื้อ" 
-                  : "How to use: Enter first set numbers, click \"Add Set 1\" → Enter next set, click \"Add Set 2\" → Repeat → Set price per number → Click \"Add to Cart\" to purchase"}
+                  ? "วิธีใช้: พิมพ์เลขชุดแรก กดปุ่ม \"เพิ่มชุดที่ 1\" → พิมพ์เลขชุดถัดไป กดปุ่ม \"เพิ่มชุดที่ 2\" → ทำซ้ำจนครบ → ตั้งราคาต่อชุด → กดปุ่ม \"เพิ่มลงตะกร้า\" เพื่อซื้อ" 
+                  : "How to use: Enter first set numbers, click \"Add Set 1\" → Enter next set, click \"Add Set 2\" → Repeat → Set price per set → Click \"Add to Cart\" to purchase"}
               </p>
             </div>
           </CardContent>
