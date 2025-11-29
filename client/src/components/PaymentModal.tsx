@@ -33,7 +33,7 @@ const bankAccount = {
 
 export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
   const { language, t } = useI18n();
-  const { clearCart, items } = useCart();
+  const { items } = useCart();
   const { user } = useUser();
   const { toast } = useToast();
   const [copied, setCopied] = useState<string | null>(null);
@@ -41,31 +41,46 @@ export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
 
   const referenceNumber = `QNQ${Date.now().toString(36).toUpperCase()}`;
 
-  const submitBetsMutation = useMutation({
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const submitDepositMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/bets", {
-        userId: user?.id || "guest",
-        items: items.map(item => ({
-          lotteryType: item.lotteryType,
-          betType: item.betType,
-          numbers: item.numbers,
-          amount: item.amount
-        }))
+      const slipBase64 = slipFile ? await fileToBase64(slipFile) : null;
+      
+      const cartItemsJson = JSON.stringify(items.map(item => ({
+        lotteryType: item.lotteryType,
+        betType: item.betType,
+        numbers: item.numbers,
+        amount: item.amount
+      })));
+      
+      const res = await apiRequest("POST", "/api/transactions", {
+        userId: user?.id,
+        type: "deposit",
+        amount: amount,
+        slipUrl: slipBase64,
+        reference: referenceNumber,
+        cartItems: cartItemsJson
       });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/bets?userId=${user?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/transactions/${user?.id}`] });
-      clearCart();
       setSlipFile(null);
       onClose();
       toast({
-        title: language === "th" ? "บันทึกรายการแทงสำเร็จ" : "Bets submitted successfully",
+        title: language === "th" ? "ส่งคำขอฝากเงินแล้ว" : "Deposit request submitted",
         description: language === "th" 
-          ? "กรุณารอการตรวจสอบการชำระเงิน" 
-          : "Please wait for payment verification"
+          ? "กรุณารอ Admin ตรวจสอบและอนุมัติ" 
+          : "Please wait for admin to verify and approve"
       });
     },
     onError: (error) => {
@@ -99,7 +114,15 @@ export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
       return;
     }
 
-    submitBetsMutation.mutate();
+    if (!user?.id) {
+      toast({
+        title: language === "th" ? "กรุณาเข้าสู่ระบบ" : "Please login",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    submitDepositMutation.mutate();
   };
 
   const promptPayQrData = `00020101021129370016A000000677010111011300${bankAccount.promptPayId}5802TH53037646304`;
@@ -236,18 +259,18 @@ export function PaymentModal({ isOpen, onClose, amount }: PaymentModalProps) {
           <Button
             onClick={handleSubmit}
             className="w-full"
-            disabled={!slipFile || submitBetsMutation.isPending}
+            disabled={!slipFile || submitDepositMutation.isPending}
             data-testid="button-confirm-payment"
           >
-            {submitBetsMutation.isPending ? (
+            {submitDepositMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {language === "th" ? "กำลังบันทึก..." : "Saving..."}
+                {language === "th" ? "กำลังส่งคำขอ..." : "Submitting..."}
               </>
             ) : (
               <>
                 <Upload className="h-4 w-4 mr-2" />
-                {t("payment.confirm")}
+                {language === "th" ? "ส่งคำขอฝากเงิน" : "Submit Deposit Request"}
               </>
             )}
           </Button>

@@ -321,6 +321,7 @@ export async function registerRoutes(
           username,
           userId: userIdNum,
           amount,
+          hasSlip: !!slipUrl,
           ip: clientIp
         }).catch(err => {
           console.error("Failed to send Telegram notification:", err);

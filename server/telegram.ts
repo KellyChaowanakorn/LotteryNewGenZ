@@ -60,16 +60,21 @@ export interface DepositNotificationData {
   username: string;
   userId: number;
   amount: number;
+  hasSlip?: boolean;
   ip?: string;
 }
 
 export async function sendPaymentNotification(data: DepositNotificationData): Promise<boolean> {
   const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
-  const message = `🚨 <b>แจ้งฝากเงินใหม่!</b>
+  const slipStatus = data.hasSlip ? '📎 แนบสลิปแล้ว' : '⚠️ ยังไม่ได้แนบสลิป';
+  const message = `🚨 <b>คำขอฝากเงินใหม่!</b>
 👤 ผู้ใช้: ${data.username}
 🆔 ID: ${data.userId}
 💰 จำนวน: ${data.amount.toLocaleString()} บาท
-⏰ เวลา: ${timestamp}${data.ip ? `\n📍 IP: ${data.ip}` : ''}`;
+${slipStatus}
+⏰ เวลา: ${timestamp}${data.ip ? `\n📍 IP: ${data.ip}` : ''}
+
+📲 กรุณาตรวจสอบในหน้า Admin`;
   
   return sendTelegramMessage(message);
 }

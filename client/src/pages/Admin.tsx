@@ -49,8 +49,16 @@ import {
   PieChart,
   Trophy,
   Play,
-  LogOut
+  LogOut,
+  ImageIcon
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -706,6 +714,7 @@ export default function Admin() {
                       <TableRow>
                         <TableHead>{language === "th" ? "ผู้ใช้" : "User"}</TableHead>
                         <TableHead>{language === "th" ? "จำนวน" : "Amount"}</TableHead>
+                        <TableHead>{language === "th" ? "สลิป" : "Slip"}</TableHead>
                         <TableHead>{language === "th" ? "อ้างอิง" : "Reference"}</TableHead>
                         <TableHead>{language === "th" ? "วันที่" : "Date"}</TableHead>
                         <TableHead className="text-right">{language === "th" ? "จัดการ" : "Actions"}</TableHead>
@@ -717,6 +726,41 @@ export default function Admin() {
                           <TableCell className="font-medium">{getUsernameById(tx.userId)}</TableCell>
                           <TableCell className="font-bold text-green-600">
                             +{tx.amount.toLocaleString()} ฿
+                          </TableCell>
+                          <TableCell>
+                            {tx.slipUrl ? (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline" data-testid={`button-view-slip-${tx.id}`}>
+                                    <ImageIcon className="h-4 w-4 mr-1" />
+                                    {language === "th" ? "ดูสลิป" : "View"}
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-lg">
+                                  <DialogHeader>
+                                    <DialogTitle>
+                                      {language === "th" ? "สลิปการโอนเงิน" : "Payment Slip"}
+                                    </DialogTitle>
+                                  </DialogHeader>
+                                  <div className="flex flex-col gap-4">
+                                    <div className="text-sm space-y-1">
+                                      <p><strong>{language === "th" ? "ผู้ใช้:" : "User:"}</strong> {getUsernameById(tx.userId)}</p>
+                                      <p><strong>{language === "th" ? "จำนวน:" : "Amount:"}</strong> {tx.amount.toLocaleString()} ฿</p>
+                                      <p><strong>{language === "th" ? "อ้างอิง:" : "Reference:"}</strong> {tx.reference}</p>
+                                    </div>
+                                    <img 
+                                      src={tx.slipUrl} 
+                                      alt="Payment slip" 
+                                      className="w-full rounded-lg border"
+                                    />
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">
+                                {language === "th" ? "ไม่มีสลิป" : "No slip"}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="font-mono text-xs">{tx.reference}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
