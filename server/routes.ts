@@ -272,6 +272,13 @@ export async function registerRoutes(
       for (const item of items) {
         const { lotteryType, betType, numbers, amount } = item;
         
+        const isBetTypeEnabled = await storage.isBetTypeEnabled(betType);
+        if (!isBetTypeEnabled) {
+          return res.status(400).json({ 
+            error: `Bet type ${betType} is currently disabled. ไม่รับแทงประเภทนี้ในขณะนี้`
+          });
+        }
+
         let payoutRate: number;
         try {
           payoutRate = await storage.getPayoutRate(betType);
@@ -1071,6 +1078,47 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating payout rate:", error);
       res.status(500).json({ error: "Failed to update payout rate" });
+    }
+  });
+
+  app.get("/api/bet-type-settings", async (req, res) => {
+    try {
+      const settings = await storage.getBetTypeSettings();
+      if (settings.length === 0) {
+        await storage.initializeBetTypeSettings();
+        const initializedSettings = await storage.getBetTypeSettings();
+        return res.json(initializedSettings);
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching bet type settings:", error);
+      res.status(500).json({ error: "Failed to fetch bet type settings" });
+    }
+  });
+
+  app.patch("/api/bet-type-settings/:betType", requireAdmin, async (req, res) => {
+    try {
+      const { betType } = req.params;
+      const { isEnabled } = req.body;
+      
+      const validBetTypes = [
+        "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
+        "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+      ];
+      
+      if (!validBetTypes.includes(betType)) {
+        return res.status(400).json({ error: "Invalid bet type" });
+      }
+      
+      if (typeof isEnabled !== "boolean") {
+        return res.status(400).json({ error: "isEnabled must be a boolean" });
+      }
+      
+      const updated = await storage.updateBetTypeSetting(betType, isEnabled);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating bet type setting:", error);
+      res.status(500).json({ error: "Failed to update bet type setting" });
     }
   });
 
