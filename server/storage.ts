@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import {
   users,
   bets,
@@ -8,6 +8,8 @@ import {
   affiliates,
   lotteryResults,
   payoutSettings,
+  betLimits,
+  betLimitLotteryTypes,
   type User,
   type InsertUser,
   type Bet,
@@ -20,7 +22,10 @@ import {
   type InsertLotteryResult,
   type StoredLotteryResult,
   type PayoutSetting,
-  type InsertPayoutSetting
+  type InsertPayoutSetting,
+  type BetLimit,
+  type InsertBetLimit,
+  type BetLimitWithLotteryTypes
 } from "@shared/schema";
 
 export interface IStorage {
@@ -64,6 +69,14 @@ export interface IStorage {
   getPayoutRate(betType: string): Promise<number>;
   updatePayoutRate(betType: string, rate: number): Promise<PayoutSetting>;
   initializePayoutRates(): Promise<void>;
+
+  getBetLimits(): Promise<BetLimitWithLotteryTypes[]>;
+  getBetLimit(id: number): Promise<BetLimitWithLotteryTypes | undefined>;
+  createBetLimit(limit: InsertBetLimit, lotteryTypes: string[]): Promise<BetLimitWithLotteryTypes>;
+  updateBetLimit(id: number, limit: Partial<InsertBetLimit>, lotteryTypes?: string[]): Promise<BetLimitWithLotteryTypes | undefined>;
+  deleteBetLimit(id: number): Promise<boolean>;
+  getActiveBetLimitForNumber(number: string, lotteryType: string): Promise<BetLimitWithLotteryTypes | undefined>;
+  getTotalBetAmountForNumber(number: string, lotteryType: string, drawDate: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -347,6 +360,144 @@ export class DatabaseStorage implements IStorage {
         await db.insert(payoutSettings).values({ betType, rate });
       }
     }
+  }
+
+  async getBetLimits(): Promise<BetLimitWithLotteryTypes[]> {
+    const limits = await db.select().from(betLimits);
+    const result: BetLimitWithLotteryTypes[] = [];
+    
+    for (const limit of limits) {
+      const lotteryTypesRows = await db
+        .select()
+        .from(betLimitLotteryTypes)
+        .where(eq(betLimitLotteryTypes.betLimitId, limit.id));
+      
+      result.push({
+        ...limit,
+        lotteryTypes: lotteryTypesRows.map(lt => lt.lotteryType)
+      });
+    }
+    
+    return result;
+  }
+
+  async getBetLimit(id: number): Promise<BetLimitWithLotteryTypes | undefined> {
+    const [limit] = await db.select().from(betLimits).where(eq(betLimits.id, id));
+    if (!limit) return undefined;
+    
+    const lotteryTypesRows = await db
+      .select()
+      .from(betLimitLotteryTypes)
+      .where(eq(betLimitLotteryTypes.betLimitId, id));
+    
+    return {
+      ...limit,
+      lotteryTypes: lotteryTypesRows.map(lt => lt.lotteryType)
+    };
+  }
+
+  async createBetLimit(limit: InsertBetLimit, lotteryTypes: string[]): Promise<BetLimitWithLotteryTypes> {
+    return db.transaction(async (tx) => {
+      const [created] = await tx.insert(betLimits).values(limit).returning();
+      
+      if (lotteryTypes.length > 0) {
+        await tx.insert(betLimitLotteryTypes).values(
+          lotteryTypes.map(lt => ({
+            betLimitId: created.id,
+            lotteryType: lt
+          }))
+        );
+      }
+      
+      return {
+        ...created,
+        lotteryTypes
+      };
+    });
+  }
+
+  async updateBetLimit(
+    id: number, 
+    limitUpdate: Partial<InsertBetLimit>, 
+    lotteryTypes?: string[]
+  ): Promise<BetLimitWithLotteryTypes | undefined> {
+    return db.transaction(async (tx) => {
+      if (Object.keys(limitUpdate).length > 0) {
+        await tx.update(betLimits).set(limitUpdate).where(eq(betLimits.id, id));
+      }
+      
+      if (lotteryTypes !== undefined) {
+        await tx.delete(betLimitLotteryTypes).where(eq(betLimitLotteryTypes.betLimitId, id));
+        
+        if (lotteryTypes.length > 0) {
+          await tx.insert(betLimitLotteryTypes).values(
+            lotteryTypes.map(lt => ({
+              betLimitId: id,
+              lotteryType: lt
+            }))
+          );
+        }
+      }
+      
+      const [updated] = await tx.select().from(betLimits).where(eq(betLimits.id, id));
+      if (!updated) return undefined;
+      
+      const lotteryTypesRows = await tx
+        .select()
+        .from(betLimitLotteryTypes)
+        .where(eq(betLimitLotteryTypes.betLimitId, id));
+      
+      return {
+        ...updated,
+        lotteryTypes: lotteryTypesRows.map(lt => lt.lotteryType)
+      };
+    });
+  }
+
+  async deleteBetLimit(id: number): Promise<boolean> {
+    const result = await db.delete(betLimits).where(eq(betLimits.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getActiveBetLimitForNumber(number: string, lotteryType: string): Promise<BetLimitWithLotteryTypes | undefined> {
+    const limits = await db
+      .select()
+      .from(betLimits)
+      .where(and(eq(betLimits.number, number), eq(betLimits.isActive, true)));
+    
+    for (const limit of limits) {
+      const lotteryTypesRows = await db
+        .select()
+        .from(betLimitLotteryTypes)
+        .where(eq(betLimitLotteryTypes.betLimitId, limit.id));
+      
+      const associatedTypes = lotteryTypesRows.map(lt => lt.lotteryType);
+      
+      if (associatedTypes.length === 0 || associatedTypes.includes(lotteryType)) {
+        return {
+          ...limit,
+          lotteryTypes: associatedTypes
+        };
+      }
+    }
+    
+    return undefined;
+  }
+
+  async getTotalBetAmountForNumber(number: string, lotteryType: string, drawDate: string): Promise<number> {
+    const result = await db
+      .select({ total: sql<number>`COALESCE(SUM(${bets.amount}), 0)` })
+      .from(bets)
+      .where(
+        and(
+          eq(bets.numbers, number),
+          eq(bets.lotteryType, lotteryType),
+          eq(bets.drawDate, drawDate),
+          inArray(bets.status, ["pending", "won", "lost"])
+        )
+      );
+    
+    return result[0]?.total || 0;
   }
 }
 
