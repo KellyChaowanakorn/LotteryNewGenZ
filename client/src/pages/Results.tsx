@@ -52,7 +52,7 @@ interface ThaiLottoApiResponse {
 
 const externalUrls: Record<LotteryType, string> = {
   THAI_GOV: "https://www.glo.or.th/",
-  THAI_STOCK: "https://lotto.mthai.com/lottery/stock",
+  THAI_STOCK: "https://www.set.or.th/th/market/index/set/overview",
   STOCK_NIKKEI: "https://www.investing.com/indices/japan-ni225",
   STOCK_DOW: "https://www.investing.com/indices/us-30",
   STOCK_FTSE: "https://www.investing.com/indices/uk-100",
