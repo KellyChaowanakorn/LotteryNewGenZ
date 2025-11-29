@@ -193,3 +193,13 @@ Preferred communication style: Simple, everyday language.
 - Enforcement: Checks limits before bet creation in `/api/bets`, returns descriptive error with max/current/remaining amounts
 - Limits can apply to all lottery types (no associations) or specific selected types
 - Per-draw enforcement: Sums existing bets for same number/lottery/draw date when checking limits
+
+### Bet Type Enable/Disable System (Nov 29, 2025)
+- Admin-configurable global toggle for each bet type (3 ตัวบน, 2 ตัวบน, วิ่งบน, etc.)
+- Schema: `betTypeSettings` table (id, betType, isEnabled, updatedAt)
+- Storage methods: `initializeBetTypeSettings()`, `getBetTypeSettings()`, `updateBetTypeSetting()`, `isBetTypeEnabled()`
+- API endpoints: `GET /api/bet-type-settings`, `PATCH /api/bet-type-settings/:betType`
+- Admin UI: New "ประเภท" (Types) tab with toggle switches for each of the 9 bet types
+- Enforcement: Each cart item validated via `isBetTypeEnabled()` before processing in `/api/bets`
+- Validation order: bet type enabled → payout rate → blocked numbers → bet limits
+- All bet types initialized as enabled on server startup
