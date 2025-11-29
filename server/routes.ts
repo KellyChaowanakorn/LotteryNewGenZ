@@ -49,7 +49,10 @@ export async function registerRoutes(
 
   app.patch("/api/blocked-numbers/:id", async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
       const { isActive } = req.body;
       const blocked = await storage.updateBlockedNumber(id, isActive);
       if (!blocked) {
@@ -63,7 +66,10 @@ export async function registerRoutes(
 
   app.delete("/api/blocked-numbers/:id", async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
       const deleted = await storage.deleteBlockedNumber(id);
       if (!deleted) {
         return res.status(404).json({ error: "Blocked number not found" });
@@ -86,18 +92,34 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Username already exists" });
       }
 
+      let referredBy: string | null = null;
+      if (referralCode) {
+        const referrer = await storage.getUserByReferralCode(referralCode);
+        if (referrer) {
+          referredBy = referralCode;
+        }
+      }
+
       const user = await storage.createUser({
         username,
         password,
         balance: 0,
         referralCode: `QNQ${Date.now().toString(36).toUpperCase()}`,
-        referredBy: referralCode || null,
+        referredBy,
         affiliateEarnings: 0,
       });
+
+      if (referredBy) {
+        const referrer = await storage.getUserByReferralCode(referredBy);
+        if (referrer) {
+          await storage.createAffiliate(referrer.id, user.id);
+        }
+      }
 
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error) {
+      console.error("Registration error:", error);
       res.status(500).json({ error: "Failed to register user" });
     }
   });
@@ -123,7 +145,11 @@ export async function registerRoutes(
 
   app.get("/api/users/:id", async (req, res) => {
     try {
-      const user = await storage.getUser(req.params.id);
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const user = await storage.getUser(id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -137,7 +163,9 @@ export async function registerRoutes(
   app.post("/api/bets", async (req, res) => {
     try {
       const { userId, items } = req.body;
-      if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+      const userIdNum = typeof userId === "string" ? parseInt(userId, 10) : userId;
+      
+      if (!userIdNum || isNaN(userIdNum) || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
@@ -161,7 +189,7 @@ export async function registerRoutes(
         }
 
         const bet = await storage.createBet({
-          userId,
+          userId: userIdNum,
           lotteryType,
           betType,
           numbers,
@@ -175,10 +203,10 @@ export async function registerRoutes(
         totalAmount += amount;
       }
 
-      await storage.updateUserBalance(userId, -totalAmount);
+      await storage.updateUserBalance(userIdNum, -totalAmount);
 
       await storage.createTransaction({
-        userId,
+        userId: userIdNum,
         type: "bet",
         amount: -totalAmount,
         status: "approved",
@@ -186,8 +214,11 @@ export async function registerRoutes(
         reference: `BET${Date.now().toString(36).toUpperCase()}`,
       });
 
+      await storage.updateAffiliateStats(userIdNum, totalAmount);
+
       res.json({ bets: createdBets, totalAmount });
     } catch (error) {
+      console.error("Bet creation error:", error);
       res.status(500).json({ error: "Failed to create bets" });
     }
   });
@@ -195,7 +226,8 @@ export async function registerRoutes(
   app.get("/api/bets", async (req, res) => {
     try {
       const userId = req.query.userId as string | undefined;
-      const bets = await storage.getBets(userId);
+      const userIdNum = userId ? parseInt(userId, 10) : undefined;
+      const bets = await storage.getBets(userIdNum);
       res.json(bets);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bets" });
@@ -204,7 +236,20 @@ export async function registerRoutes(
 
   app.get("/api/transactions/:userId", async (req, res) => {
     try {
-      const transactions = await storage.getTransactions(req.params.userId);
+      const id = parseInt(req.params.userId, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      const transactions = await storage.getTransactions(id);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const transactions = await storage.getAllTransactions();
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch transactions" });
@@ -214,12 +259,14 @@ export async function registerRoutes(
   app.post("/api/transactions", async (req, res) => {
     try {
       const { userId, type, amount, slipUrl } = req.body;
-      if (!userId || !type || amount === undefined) {
+      const userIdNum = typeof userId === "string" ? parseInt(userId, 10) : userId;
+      
+      if (!userIdNum || isNaN(userIdNum) || !type || amount === undefined) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
       const transaction = await storage.createTransaction({
-        userId,
+        userId: userIdNum,
         type,
         amount,
         status: "pending",
@@ -230,6 +277,30 @@ export async function registerRoutes(
       res.json(transaction);
     } catch (error) {
       res.status(500).json({ error: "Failed to create transaction" });
+    }
+  });
+
+  app.patch("/api/transactions/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const { status, userId, amount } = req.body;
+      
+      const transaction = await storage.updateTransactionStatus(id, status);
+      if (!transaction) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+
+      if (status === "approved" && transaction.type === "deposit" && userId && amount) {
+        const userIdNum = typeof userId === "string" ? parseInt(userId, 10) : userId;
+        await storage.updateUserBalance(userIdNum, amount);
+      }
+
+      res.json(transaction);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update transaction" });
     }
   });
 
@@ -273,8 +344,12 @@ export async function registerRoutes(
 
   app.get("/api/affiliates/:userId", async (req, res) => {
     try {
-      const affiliates = await storage.getAffiliates(req.params.userId);
-      res.json(affiliates);
+      const id = parseInt(req.params.userId, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      const affiliateList = await storage.getAffiliates(id);
+      res.json(affiliateList);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch affiliates" });
     }

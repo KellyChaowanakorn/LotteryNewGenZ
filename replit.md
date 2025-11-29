@@ -121,3 +121,15 @@ Preferred communication style: Simple, everyday language.
 
 ### Font Dependencies
 - Google Fonts CDN: Inter (primary), Noto Sans Thai (Thai support), Urbanist (accent/logo)
+
+## Recent Changes
+
+### PostgreSQL Database Integration (Nov 29, 2025)
+- Migrated from in-memory storage to PostgreSQL database using Drizzle ORM
+- Updated schema.ts with proper Drizzle table definitions using pgTable
+- Implemented DatabaseStorage class replacing MemStorage for all CRUD operations
+- All routes now properly parse integer IDs for database operations
+- Tables created: users, bets, blocked_numbers, transactions, affiliates
+- User IDs are now integers (serial primary key) instead of strings
+- Added proper foreign key relationships between tables
+- Affiliate system properly tracks referrals and calculates 20% commission on bets

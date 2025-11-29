@@ -1,245 +1,185 @@
-import { randomUUID } from "crypto";
-
-export interface User {
-  id: string;
-  username: string;
-  password: string;
-  balance: number;
-  referralCode: string;
-  referredBy: string | null;
-  affiliateEarnings: number;
-  createdAt: string;
-}
-
-export interface Bet {
-  id: string;
-  userId: string;
-  lotteryType: string;
-  betType: string;
-  numbers: string;
-  amount: number;
-  potentialWin: number;
-  status: "pending" | "confirmed" | "won" | "lost";
-  drawDate: string;
-  createdAt: string;
-}
-
-export interface BlockedNumber {
-  id: string;
-  lotteryType: string;
-  number: string;
-  betType: string | null;
-  isActive: boolean;
-  createdAt: string;
-}
-
-export interface Transaction {
-  id: string;
-  userId: string;
-  type: "deposit" | "withdraw" | "bet" | "win" | "affiliate";
-  amount: number;
-  status: "pending" | "approved" | "rejected";
-  slipUrl: string | null;
-  reference: string;
-  createdAt: string;
-}
-
-export interface Affiliate {
-  id: string;
-  referrerId: string;
-  referredId: string;
-  totalBetAmount: number;
-  commission: number;
-  createdAt: string;
-}
-
-export type InsertUser = Omit<User, "id" | "createdAt">;
-export type InsertBet = Omit<Bet, "id" | "createdAt">;
-export type InsertBlockedNumber = Omit<BlockedNumber, "id" | "createdAt">;
-export type InsertTransaction = Omit<Transaction, "id" | "createdAt">;
+import { db } from "./db";
+import { eq, and, sql } from "drizzle-orm";
+import {
+  users,
+  bets,
+  blockedNumbers,
+  transactions,
+  affiliates,
+  type User,
+  type InsertUser,
+  type Bet,
+  type InsertBet,
+  type BlockedNumber,
+  type InsertBlockedNumber,
+  type Transaction,
+  type InsertTransaction,
+  type Affiliate
+} from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
+  getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByReferralCode(code: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserBalance(userId: string, amount: number): Promise<User | undefined>;
+  updateUserBalance(userId: number, amount: number): Promise<User | undefined>;
+  updateUserAffiliateEarnings(userId: number, amount: number): Promise<User | undefined>;
 
-  getBets(userId?: string): Promise<Bet[]>;
-  getBet(id: string): Promise<Bet | undefined>;
+  getBets(userId?: number): Promise<Bet[]>;
+  getBet(id: number): Promise<Bet | undefined>;
   createBet(bet: InsertBet): Promise<Bet>;
-  updateBetStatus(id: string, status: Bet["status"]): Promise<Bet | undefined>;
+  updateBetStatus(id: number, status: string): Promise<Bet | undefined>;
 
   getBlockedNumbers(lotteryType?: string): Promise<BlockedNumber[]>;
   createBlockedNumber(blocked: InsertBlockedNumber): Promise<BlockedNumber>;
-  updateBlockedNumber(id: string, isActive: boolean): Promise<BlockedNumber | undefined>;
-  deleteBlockedNumber(id: string): Promise<boolean>;
+  updateBlockedNumber(id: number, isActive: boolean): Promise<BlockedNumber | undefined>;
+  deleteBlockedNumber(id: number): Promise<boolean>;
 
-  getTransactions(userId: string): Promise<Transaction[]>;
+  getTransactions(userId: number): Promise<Transaction[]>;
+  getAllTransactions(): Promise<Transaction[]>;
   createTransaction(tx: InsertTransaction): Promise<Transaction>;
-  updateTransactionStatus(id: string, status: Transaction["status"]): Promise<Transaction | undefined>;
+  updateTransactionStatus(id: number, status: string): Promise<Transaction | undefined>;
 
-  getAffiliates(referrerId: string): Promise<Affiliate[]>;
+  getAffiliates(referrerId: number): Promise<Affiliate[]>;
+  createAffiliate(referrerId: number, referredId: number): Promise<Affiliate>;
+  updateAffiliateStats(referredId: number, betAmount: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private bets: Map<string, Bet>;
-  private blockedNumbers: Map<string, BlockedNumber>;
-  private transactions: Map<string, Transaction>;
-  private affiliates: Map<string, Affiliate>;
-
-  constructor() {
-    this.users = new Map();
-    this.bets = new Map();
-    this.blockedNumbers = new Map();
-    this.transactions = new Map();
-    this.affiliates = new Map();
-
-    this.seedBlockedNumbers();
-  }
-
-  private seedBlockedNumbers() {
-    const seedData: InsertBlockedNumber[] = [
-      { lotteryType: "THAI_GOV", number: "123", betType: null, isActive: true },
-      { lotteryType: "THAI_GOV", number: "456", betType: "THREE_TOP", isActive: true },
-      { lotteryType: "THAI_STOCK", number: "78", betType: "TWO_TOP", isActive: true },
-      { lotteryType: "HANOI", number: "999", betType: null, isActive: true },
-    ];
-
-    seedData.forEach((data) => {
-      const id = randomUUID();
-      this.blockedNumbers.set(id, {
-        ...data,
-        id,
-        createdAt: new Date().toISOString(),
-      });
-    });
-  }
-
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByReferralCode(code: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.referralCode, code));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = {
-      ...insertUser,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
-  async updateUserBalance(userId: string, amount: number): Promise<User | undefined> {
-    const user = this.users.get(userId);
-    if (!user) return undefined;
-    user.balance += amount;
-    this.users.set(userId, user);
-    return user;
+  async updateUserBalance(userId: number, amount: number): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ balance: sql`${users.balance} + ${amount}` })
+      .where(eq(users.id, userId))
+      .returning();
+    return user || undefined;
   }
 
-  async getBets(userId?: string): Promise<Bet[]> {
-    const allBets = Array.from(this.bets.values());
+  async updateUserAffiliateEarnings(userId: number, amount: number): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ affiliateEarnings: sql`${users.affiliateEarnings} + ${amount}` })
+      .where(eq(users.id, userId))
+      .returning();
+    return user || undefined;
+  }
+
+  async getBets(userId?: number): Promise<Bet[]> {
     if (userId) {
-      return allBets.filter((bet) => bet.userId === userId);
+      return db.select().from(bets).where(eq(bets.userId, userId));
     }
-    return allBets;
+    return db.select().from(bets);
   }
 
-  async getBet(id: string): Promise<Bet | undefined> {
-    return this.bets.get(id);
+  async getBet(id: number): Promise<Bet | undefined> {
+    const [bet] = await db.select().from(bets).where(eq(bets.id, id));
+    return bet || undefined;
   }
 
   async createBet(insertBet: InsertBet): Promise<Bet> {
-    const id = randomUUID();
-    const bet: Bet = {
-      ...insertBet,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.bets.set(id, bet);
+    const [bet] = await db.insert(bets).values(insertBet).returning();
     return bet;
   }
 
-  async updateBetStatus(id: string, status: Bet["status"]): Promise<Bet | undefined> {
-    const bet = this.bets.get(id);
-    if (!bet) return undefined;
-    bet.status = status;
-    this.bets.set(id, bet);
-    return bet;
+  async updateBetStatus(id: number, status: string): Promise<Bet | undefined> {
+    const [bet] = await db
+      .update(bets)
+      .set({ status })
+      .where(eq(bets.id, id))
+      .returning();
+    return bet || undefined;
   }
 
   async getBlockedNumbers(lotteryType?: string): Promise<BlockedNumber[]> {
-    const allBlocked = Array.from(this.blockedNumbers.values());
     if (lotteryType) {
-      return allBlocked.filter((bn) => bn.lotteryType === lotteryType);
+      return db.select().from(blockedNumbers).where(eq(blockedNumbers.lotteryType, lotteryType));
     }
-    return allBlocked;
+    return db.select().from(blockedNumbers);
   }
 
   async createBlockedNumber(insertBlocked: InsertBlockedNumber): Promise<BlockedNumber> {
-    const id = randomUUID();
-    const blocked: BlockedNumber = {
-      ...insertBlocked,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.blockedNumbers.set(id, blocked);
+    const [blocked] = await db.insert(blockedNumbers).values(insertBlocked).returning();
     return blocked;
   }
 
-  async updateBlockedNumber(id: string, isActive: boolean): Promise<BlockedNumber | undefined> {
-    const blocked = this.blockedNumbers.get(id);
-    if (!blocked) return undefined;
-    blocked.isActive = isActive;
-    this.blockedNumbers.set(id, blocked);
-    return blocked;
+  async updateBlockedNumber(id: number, isActive: boolean): Promise<BlockedNumber | undefined> {
+    const [blocked] = await db
+      .update(blockedNumbers)
+      .set({ isActive })
+      .where(eq(blockedNumbers.id, id))
+      .returning();
+    return blocked || undefined;
   }
 
-  async deleteBlockedNumber(id: string): Promise<boolean> {
-    return this.blockedNumbers.delete(id);
+  async deleteBlockedNumber(id: number): Promise<boolean> {
+    const result = await db.delete(blockedNumbers).where(eq(blockedNumbers.id, id)).returning();
+    return result.length > 0;
   }
 
-  async getTransactions(userId: string): Promise<Transaction[]> {
-    return Array.from(this.transactions.values()).filter(
-      (tx) => tx.userId === userId
-    );
+  async getTransactions(userId: number): Promise<Transaction[]> {
+    return db.select().from(transactions).where(eq(transactions.userId, userId));
+  }
+
+  async getAllTransactions(): Promise<Transaction[]> {
+    return db.select().from(transactions);
   }
 
   async createTransaction(insertTx: InsertTransaction): Promise<Transaction> {
-    const id = randomUUID();
-    const tx: Transaction = {
-      ...insertTx,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.transactions.set(id, tx);
+    const [tx] = await db.insert(transactions).values(insertTx).returning();
     return tx;
   }
 
-  async updateTransactionStatus(
-    id: string,
-    status: Transaction["status"]
-  ): Promise<Transaction | undefined> {
-    const tx = this.transactions.get(id);
-    if (!tx) return undefined;
-    tx.status = status;
-    this.transactions.set(id, tx);
-    return tx;
+  async updateTransactionStatus(id: number, status: string): Promise<Transaction | undefined> {
+    const [tx] = await db
+      .update(transactions)
+      .set({ status })
+      .where(eq(transactions.id, id))
+      .returning();
+    return tx || undefined;
   }
 
-  async getAffiliates(referrerId: string): Promise<Affiliate[]> {
-    return Array.from(this.affiliates.values()).filter(
-      (aff) => aff.referrerId === referrerId
-    );
+  async getAffiliates(referrerId: number): Promise<Affiliate[]> {
+    return db.select().from(affiliates).where(eq(affiliates.referrerId, referrerId));
+  }
+
+  async createAffiliate(referrerId: number, referredId: number): Promise<Affiliate> {
+    const [affiliate] = await db
+      .insert(affiliates)
+      .values({ referrerId, referredId, totalBetAmount: 0, commission: 0 })
+      .returning();
+    return affiliate;
+  }
+
+  async updateAffiliateStats(referredId: number, betAmount: number): Promise<void> {
+    const commission = betAmount * 0.20;
+    await db
+      .update(affiliates)
+      .set({
+        totalBetAmount: sql`${affiliates.totalBetAmount} + ${betAmount}`,
+        commission: sql`${affiliates.commission} + ${commission}`
+      })
+      .where(eq(affiliates.referredId, referredId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

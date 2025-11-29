@@ -1,4 +1,7 @@
+import { pgTable, text, integer, boolean, timestamp, real, serial } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 export const lotteryTypes = [
   "THAI_GOV",
@@ -70,72 +73,122 @@ export const betTypeNames: Record<BetType, { th: string; en: string }> = {
   RUN_BOTTOM: { th: "วิ่งล่าง", en: "Run Bottom" }
 };
 
-export const userSchema = z.object({
-  id: z.string(),
-  username: z.string().min(3),
-  password: z.string().min(6),
-  balance: z.number().default(0),
-  referralCode: z.string(),
-  referredBy: z.string().nullable(),
-  affiliateEarnings: z.number().default(0),
-  createdAt: z.string()
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  balance: real("balance").notNull().default(0),
+  referralCode: text("referral_code").notNull().unique(),
+  referredBy: text("referred_by"),
+  affiliateEarnings: real("affiliate_earnings").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow()
 });
 
-export type User = z.infer<typeof userSchema>;
-export type InsertUser = Omit<User, "id" | "createdAt">;
-
-export const betSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  lotteryType: z.enum(lotteryTypes),
-  betType: z.enum(betTypes),
-  numbers: z.string(),
-  amount: z.number().min(1),
-  potentialWin: z.number(),
-  status: z.enum(["pending", "confirmed", "won", "lost"]),
-  drawDate: z.string(),
-  createdAt: z.string()
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true
 });
 
-export type Bet = z.infer<typeof betSchema>;
-export type InsertBet = Omit<Bet, "id" | "createdAt">;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 
-export const blockedNumberSchema = z.object({
-  id: z.string(),
-  lotteryType: z.enum(lotteryTypes),
-  number: z.string(),
-  betType: z.enum(betTypes).nullable(),
-  isActive: z.boolean().default(true),
-  createdAt: z.string()
+export const bets = pgTable("bets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  lotteryType: text("lottery_type").notNull(),
+  betType: text("bet_type").notNull(),
+  numbers: text("numbers").notNull(),
+  amount: real("amount").notNull(),
+  potentialWin: real("potential_win").notNull(),
+  status: text("status").notNull().default("pending"),
+  drawDate: text("draw_date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow()
 });
 
-export type BlockedNumber = z.infer<typeof blockedNumberSchema>;
-export type InsertBlockedNumber = Omit<BlockedNumber, "id" | "createdAt">;
-
-export const transactionSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  type: z.enum(["deposit", "withdraw", "bet", "win", "affiliate"]),
-  amount: z.number(),
-  status: z.enum(["pending", "approved", "rejected"]),
-  slipUrl: z.string().nullable(),
-  reference: z.string(),
-  createdAt: z.string()
+export const insertBetSchema = createInsertSchema(bets).omit({
+  id: true,
+  createdAt: true
 });
 
-export type Transaction = z.infer<typeof transactionSchema>;
-export type InsertTransaction = Omit<Transaction, "id" | "createdAt">;
+export type InsertBet = z.infer<typeof insertBetSchema>;
+export type Bet = typeof bets.$inferSelect;
 
-export const affiliateSchema = z.object({
-  id: z.string(),
-  referrerId: z.string(),
-  referredId: z.string(),
-  totalBetAmount: z.number().default(0),
-  commission: z.number().default(0),
-  createdAt: z.string()
+export const blockedNumbers = pgTable("blocked_numbers", {
+  id: serial("id").primaryKey(),
+  lotteryType: text("lottery_type").notNull(),
+  number: text("number").notNull(),
+  betType: text("bet_type"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow()
 });
 
-export type Affiliate = z.infer<typeof affiliateSchema>;
+export const insertBlockedNumberSchema = createInsertSchema(blockedNumbers).omit({
+  id: true,
+  createdAt: true
+});
+
+export type InsertBlockedNumber = z.infer<typeof insertBlockedNumberSchema>;
+export type BlockedNumber = typeof blockedNumbers.$inferSelect;
+
+export const transactions = pgTable("transactions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(),
+  amount: real("amount").notNull(),
+  status: text("status").notNull().default("pending"),
+  slipUrl: text("slip_url"),
+  reference: text("reference").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow()
+});
+
+export const insertTransactionSchema = createInsertSchema(transactions).omit({
+  id: true,
+  createdAt: true
+});
+
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type Transaction = typeof transactions.$inferSelect;
+
+export const affiliates = pgTable("affiliates", {
+  id: serial("id").primaryKey(),
+  referrerId: integer("referrer_id").notNull().references(() => users.id),
+  referredId: integer("referred_id").notNull().references(() => users.id),
+  totalBetAmount: real("total_bet_amount").notNull().default(0),
+  commission: real("commission").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow()
+});
+
+export type Affiliate = typeof affiliates.$inferSelect;
+
+export const usersRelations = relations(users, ({ many }) => ({
+  bets: many(bets),
+  transactions: many(transactions)
+}));
+
+export const betsRelations = relations(bets, ({ one }) => ({
+  user: one(users, {
+    fields: [bets.userId],
+    references: [users.id]
+  })
+}));
+
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+  user: one(users, {
+    fields: [transactions.userId],
+    references: [users.id]
+  })
+}));
+
+export const affiliatesRelations = relations(affiliates, ({ one }) => ({
+  referrer: one(users, {
+    fields: [affiliates.referrerId],
+    references: [users.id]
+  }),
+  referred: one(users, {
+    fields: [affiliates.referredId],
+    references: [users.id]
+  })
+}));
 
 export const cartItemSchema = z.object({
   id: z.string(),
