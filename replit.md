@@ -183,3 +183,13 @@ Preferred communication style: Simple, everyday language.
 - Added slip image viewer in Admin page using Dialog component
 - Admins can view payment slips before approving/rejecting deposit requests
 - Shows "ดูสลิป" button when slip is available
+
+### Betting Limits System (Nov 29, 2025)
+- Admin-configurable max bet amounts per number with optional lottery type associations
+- Schema: `betLimits` table (id, number, maxAmount, isActive) with `betLimitLotteryTypes` join table (betLimitId, lotteryType)
+- Storage methods: CRUD for bet limits with transaction-safe operations
+- API endpoints: `/api/bet-limits` (GET all, POST create, PUT update, DELETE remove)
+- Admin UI: New "Limits" tab with form to add limits (number, lottery types, max amount) and table to manage existing limits
+- Enforcement: Checks limits before bet creation in `/api/bets`, returns descriptive error with max/current/remaining amounts
+- Limits can apply to all lottery types (no associations) or specific selected types
+- Per-draw enforcement: Sums existing bets for same number/lottery/draw date when checking limits
