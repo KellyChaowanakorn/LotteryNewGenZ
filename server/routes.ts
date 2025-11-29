@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
-import { sendPaymentNotification, sendWithdrawalNotification, sendTelegramMessage } from "./telegram";
+import { sendPaymentNotification, sendWithdrawalNotification, sendBetNotification, sendTelegramMessage } from "./telegram";
 
 
 export async function registerRoutes(
@@ -235,6 +235,25 @@ export async function registerRoutes(
 
       await storage.updateAffiliateStats(userIdNum, totalAmount);
 
+      const user = await storage.getUser(userIdNum);
+      const username = user?.username || `User #${userIdNum}`;
+      const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || undefined;
+      
+      sendBetNotification({
+        username,
+        userId: userIdNum,
+        items: items.map((item: any) => ({
+          lotteryType: item.lotteryType,
+          betType: item.betType,
+          numbers: item.numbers,
+          amount: item.amount
+        })),
+        totalAmount,
+        ip: clientIp
+      }).catch(err => {
+        console.error("Failed to send Telegram bet notification:", err);
+      });
+
       res.json({ bets: createdBets, totalAmount });
     } catch (error) {
       console.error("Bet creation error:", error);
@@ -295,13 +314,24 @@ export async function registerRoutes(
 
       const user = await storage.getUser(userIdNum);
       const username = user?.username || `User #${userIdNum}`;
+      const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || undefined;
       
       if (type === "deposit") {
-        sendPaymentNotification(username, amount).catch(err => {
+        sendPaymentNotification({
+          username,
+          userId: userIdNum,
+          amount,
+          ip: clientIp
+        }).catch(err => {
           console.error("Failed to send Telegram notification:", err);
         });
       } else if (type === "withdrawal") {
-        sendWithdrawalNotification(username, amount).catch(err => {
+        sendWithdrawalNotification({
+          username,
+          userId: userIdNum,
+          amount,
+          ip: clientIp
+        }).catch(err => {
           console.error("Failed to send Telegram notification:", err);
         });
       }
