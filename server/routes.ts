@@ -1075,6 +1075,7 @@ export async function registerRoutes(
   });
 
   await storage.initializePayoutRates();
+  await storage.initializeBetTypeSettings();
 
   return httpServer;
 }

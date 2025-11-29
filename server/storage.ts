@@ -10,6 +10,7 @@ import {
   payoutSettings,
   betLimits,
   betLimitLotteryTypes,
+  betTypeSettings,
   type User,
   type InsertUser,
   type Bet,
@@ -25,7 +26,9 @@ import {
   type InsertPayoutSetting,
   type BetLimit,
   type InsertBetLimit,
-  type BetLimitWithLotteryTypes
+  type BetLimitWithLotteryTypes,
+  type BetTypeSetting,
+  betTypes
 } from "@shared/schema";
 
 export interface IStorage {
@@ -77,6 +80,12 @@ export interface IStorage {
   deleteBetLimit(id: number): Promise<boolean>;
   getActiveBetLimitForNumber(number: string, lotteryType: string): Promise<BetLimitWithLotteryTypes | undefined>;
   getTotalBetAmountForNumber(number: string, lotteryType: string, drawDate: string): Promise<number>;
+
+  getBetTypeSettings(): Promise<BetTypeSetting[]>;
+  getBetTypeSetting(betType: string): Promise<BetTypeSetting | undefined>;
+  updateBetTypeSetting(betType: string, isEnabled: boolean): Promise<BetTypeSetting>;
+  initializeBetTypeSettings(): Promise<void>;
+  isBetTypeEnabled(betType: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -498,6 +507,51 @@ export class DatabaseStorage implements IStorage {
       );
     
     return result[0]?.total || 0;
+  }
+
+  async getBetTypeSettings(): Promise<BetTypeSetting[]> {
+    return db.select().from(betTypeSettings);
+  }
+
+  async getBetTypeSetting(betType: string): Promise<BetTypeSetting | undefined> {
+    const [setting] = await db
+      .select()
+      .from(betTypeSettings)
+      .where(eq(betTypeSettings.betType, betType));
+    return setting || undefined;
+  }
+
+  async updateBetTypeSetting(betType: string, isEnabled: boolean): Promise<BetTypeSetting> {
+    const existing = await this.getBetTypeSetting(betType);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(betTypeSettings)
+        .set({ isEnabled, updatedAt: new Date() })
+        .where(eq(betTypeSettings.betType, betType))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(betTypeSettings)
+        .values({ betType, isEnabled })
+        .returning();
+      return created;
+    }
+  }
+
+  async initializeBetTypeSettings(): Promise<void> {
+    for (const betType of betTypes) {
+      const existing = await this.getBetTypeSetting(betType);
+      if (!existing) {
+        await db.insert(betTypeSettings).values({ betType, isEnabled: true });
+      }
+    }
+  }
+
+  async isBetTypeEnabled(betType: string): Promise<boolean> {
+    const setting = await this.getBetTypeSetting(betType);
+    return setting?.isEnabled ?? true;
   }
 }
 
