@@ -29,6 +29,18 @@ interface ResultData {
   externalUrl: string;
 }
 
+interface StockData {
+  name: string;
+  symbol: string;
+  price: number;
+  formattedPrice: string;
+  change: string;
+  changePercent: string;
+  twoDigit: string;
+  threeDigit: string;
+  marketState: string;
+}
+
 interface ThaiLottoApiResponse {
   status: string;
   response: {
@@ -113,6 +125,123 @@ function parseThaiLottoResult(data: ThaiLottoApiResponse): ResultData | null {
     isLive: true,
     externalUrl: externalUrls.THAI_GOV
   };
+}
+
+function StockResultCard({ type, stockData, isLoading }: { 
+  type: LotteryType; 
+  stockData?: StockData | null;
+  isLoading?: boolean;
+}) {
+  const { language } = useI18n();
+  const name = lotteryTypeNames[type][language];
+  const externalUrl = externalUrls[type];
+  const siteName = externalUrlNames[type][language];
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{name}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Skeleton className="h-10 w-32" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isPositive = stockData && parseFloat(stockData.change) >= 0;
+
+  return (
+    <Card className="hover-elevate transition-all" data-testid={`card-result-${type}`}>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base">{name}</CardTitle>
+          {stockData ? (
+            <Badge variant="secondary" className="gap-1">
+              <Wifi className="h-3 w-3" />
+              LIVE
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1">
+              <ExternalLink className="h-3 w-3" />
+              {language === "th" ? "ลิงก์ภายนอก" : "External"}
+            </Badge>
+          )}
+        </div>
+        {stockData && (
+          <CardDescription className="flex items-center gap-2">
+            <span className="text-xs">{stockData.symbol}</span>
+            <Badge variant={stockData.marketState === "REGULAR" ? "default" : "secondary"} className="text-xs px-1.5 py-0">
+              {stockData.marketState === "REGULAR" ? (language === "th" ? "เปิดตลาด" : "Open") : (language === "th" ? "ปิดตลาด" : "Closed")}
+            </Badge>
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {stockData ? (
+          <>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">
+                {language === "th" ? "ราคาล่าสุด" : "Latest Price"}
+              </p>
+              <div className="text-2xl font-bold font-mono tracking-wide text-primary">
+                {stockData.formattedPrice}
+              </div>
+              <div className={`text-sm font-medium ${isPositive ? "text-green-500" : "text-red-500"}`}>
+                {isPositive ? "+" : ""}{stockData.change} ({isPositive ? "+" : ""}{stockData.changePercent}%)
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {language === "th" ? "3 ตัวท้าย" : "Last 3 Digits"}
+                </p>
+                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
+                  {stockData.threeDigit}
+                </Badge>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {language === "th" ? "2 ตัวท้าย" : "Last 2 Digits"}
+                </p>
+                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
+                  {stockData.twoDigit}
+                </Badge>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-2 text-muted-foreground">
+            <p className="text-sm mb-3">
+              {language === "th" 
+                ? "ไม่สามารถโหลดข้อมูลหุ้นได้" 
+                : "Unable to load stock data"}
+            </p>
+          </div>
+        )}
+
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full gap-2" 
+          asChild
+          data-testid={`button-external-${type}`}
+        >
+          <a href={externalUrl} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-4 w-4" />
+            {language === "th" ? `เปิด ${siteName}` : `Open ${siteName}`}
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ResultCard({ type, thaiGovResult, isLoading, isError }: { 
@@ -257,7 +386,7 @@ export default function Results() {
   const { language, t } = useI18n();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data: thaiGovData, isLoading: isLoadingThaiGov, refetch, isError } = useQuery<ThaiLottoApiResponse>({
+  const { data: thaiGovData, isLoading: isLoadingThaiGov, refetch: refetchThaiGov, isError } = useQuery<ThaiLottoApiResponse>({
     queryKey: ["thai-lotto-api"],
     queryFn: async () => {
       const latestRes = await fetch("https://lotto.api.rayriffy.com/latest");
@@ -280,13 +409,22 @@ export default function Results() {
     retry: 2
   });
 
+  const { data: stockData, isLoading: isLoadingStock, refetch: refetchStock } = useQuery<Record<string, StockData>>({
+    queryKey: ["/api/stock-data"],
+    staleTime: 1000 * 60 * 2,
+    retry: 2
+  });
+
   const thaiGovResult = thaiGovData ? parseThaiLottoResult(thaiGovData) : null;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refetch();
+    await Promise.all([refetchThaiGov(), refetchStock()]);
     setTimeout(() => setIsRefreshing(false), 500);
   };
+
+  const isStockType = (type: LotteryType) => 
+    ["STOCK_NIKKEI", "STOCK_DOW", "STOCK_FTSE", "STOCK_DAX", "THAI_STOCK"].includes(type);
 
   const categoryNames = {
     thai: language === "th" ? "หวยไทย" : "Thai",
@@ -356,13 +494,22 @@ export default function Results() {
             <TabsContent key={key} value={key}>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {types.map((type) => (
-                  <ResultCard 
-                    key={type} 
-                    type={type} 
-                    thaiGovResult={type === "THAI_GOV" ? thaiGovResult : null}
-                    isLoading={type === "THAI_GOV" && isLoadingThaiGov}
-                    isError={type === "THAI_GOV" && isError}
-                  />
+                  isStockType(type) ? (
+                    <StockResultCard 
+                      key={type} 
+                      type={type} 
+                      stockData={stockData?.[type] || null}
+                      isLoading={isLoadingStock}
+                    />
+                  ) : (
+                    <ResultCard 
+                      key={type} 
+                      type={type} 
+                      thaiGovResult={type === "THAI_GOV" ? thaiGovResult : null}
+                      isLoading={type === "THAI_GOV" && isLoadingThaiGov}
+                      isError={type === "THAI_GOV" && isError}
+                    />
+                  )
                 ))}
               </div>
             </TabsContent>

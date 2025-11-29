@@ -600,5 +600,141 @@ export async function registerRoutes(
     }
   });
 
+  const stockSymbols: Record<string, { symbol: string; name: string }> = {
+    STOCK_NIKKEI: { symbol: "^N225", name: "Nikkei 225" },
+    STOCK_DOW: { symbol: "^DJI", name: "Dow Jones" },
+    STOCK_FTSE: { symbol: "^FTSE", name: "FTSE 100" },
+    STOCK_DAX: { symbol: "^GDAXI", name: "DAX" },
+    THAI_STOCK: { symbol: "^SET.BK", name: "SET Index" }
+  };
+
+  app.get("/api/stock-data/:type", async (req, res) => {
+    try {
+      const { type } = req.params;
+      const stockInfo = stockSymbols[type];
+      
+      if (!stockInfo) {
+        return res.status(400).json({ error: "Invalid stock type" });
+      }
+
+      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(stockInfo.symbol)}?interval=1d&range=5d`;
+      
+      const response = await fetch(yahooUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Yahoo Finance API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const result = data.chart?.result?.[0];
+      
+      if (!result) {
+        return res.status(404).json({ error: "No data available" });
+      }
+
+      const meta = result.meta;
+      const timestamps = result.timestamp || [];
+      const closes = result.indicators?.quote?.[0]?.close || [];
+      
+      const latestClose = closes.filter((c: number | null) => c !== null).pop() || meta.regularMarketPrice;
+      const previousClose = meta.previousClose || meta.chartPreviousClose;
+      const change = latestClose - previousClose;
+      const changePercent = (change / previousClose) * 100;
+
+      const latestTimestamp = timestamps[timestamps.length - 1];
+      const date = latestTimestamp ? new Date(latestTimestamp * 1000).toISOString() : new Date().toISOString();
+
+      const formattedPrice = latestClose.toFixed(2);
+      const twoDigit = formattedPrice.replace(".", "").slice(-2);
+      const threeDigit = formattedPrice.replace(".", "").slice(-3);
+
+      res.json({
+        type,
+        name: stockInfo.name,
+        symbol: stockInfo.symbol,
+        price: latestClose,
+        formattedPrice,
+        previousClose,
+        change: change.toFixed(2),
+        changePercent: changePercent.toFixed(2),
+        twoDigit,
+        threeDigit,
+        date,
+        currency: meta.currency || "JPY",
+        exchangeName: meta.exchangeName || "Unknown",
+        marketState: meta.marketState || "CLOSED",
+        externalUrl: type === "STOCK_NIKKEI" 
+          ? "https://www.investing.com/indices/japan-ni225"
+          : type === "STOCK_DOW"
+          ? "https://www.investing.com/indices/us-30"
+          : type === "STOCK_FTSE"
+          ? "https://www.investing.com/indices/uk-100"
+          : type === "STOCK_DAX"
+          ? "https://www.investing.com/indices/germany-30"
+          : "https://www.set.or.th/th/market/index/set/overview"
+      });
+    } catch (error) {
+      console.error("Error fetching stock data:", error);
+      res.status(500).json({ error: "Failed to fetch stock data" });
+    }
+  });
+
+  app.get("/api/stock-data", async (req, res) => {
+    try {
+      const results: Record<string, any> = {};
+      
+      for (const [type, stockInfo] of Object.entries(stockSymbols)) {
+        try {
+          const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(stockInfo.symbol)}?interval=1d&range=1d`;
+          
+          const response = await fetch(yahooUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const result = data.chart?.result?.[0];
+            
+            if (result) {
+              const meta = result.meta;
+              const closes = result.indicators?.quote?.[0]?.close || [];
+              const latestClose = closes.filter((c: number | null) => c !== null).pop() || meta.regularMarketPrice;
+              const previousClose = meta.previousClose || meta.chartPreviousClose;
+              const change = latestClose - previousClose;
+              const changePercent = (change / previousClose) * 100;
+
+              const formattedPrice = latestClose.toFixed(2);
+
+              results[type] = {
+                name: stockInfo.name,
+                symbol: stockInfo.symbol,
+                price: latestClose,
+                formattedPrice,
+                change: change.toFixed(2),
+                changePercent: changePercent.toFixed(2),
+                twoDigit: formattedPrice.replace(".", "").slice(-2),
+                threeDigit: formattedPrice.replace(".", "").slice(-3),
+                marketState: meta.marketState || "CLOSED"
+              };
+            }
+          }
+        } catch (err) {
+          console.error(`Error fetching ${type}:`, err);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error fetching all stock data:", error);
+      res.status(500).json({ error: "Failed to fetch stock data" });
+    }
+  });
+
   return httpServer;
 }
