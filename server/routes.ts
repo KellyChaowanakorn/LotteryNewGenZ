@@ -181,7 +181,17 @@ export async function registerRoutes(
 
       for (const item of items) {
         const { lotteryType, betType, numbers, amount } = item;
-        const payoutRate = await storage.getPayoutRate(betType);
+        
+        let payoutRate: number;
+        try {
+          payoutRate = await storage.getPayoutRate(betType);
+        } catch (payoutError: any) {
+          console.error("Payout rate error:", payoutError.message);
+          return res.status(500).json({ 
+            error: "System configuration error. Please contact administrator." 
+          });
+        }
+        
         const potentialWin = amount * payoutRate;
 
         const blocked = await storage.getBlockedNumbers(lotteryType);
@@ -843,10 +853,6 @@ export async function registerRoutes(
       const { betType } = req.params;
       const { rate } = req.body;
       
-      if (typeof rate !== "number" || rate <= 0) {
-        return res.status(400).json({ error: "Rate must be a positive number" });
-      }
-      
       const validBetTypes = [
         "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
         "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
@@ -854,6 +860,18 @@ export async function registerRoutes(
       
       if (!validBetTypes.includes(betType)) {
         return res.status(400).json({ error: "Invalid bet type" });
+      }
+      
+      if (typeof rate !== "number" || isNaN(rate)) {
+        return res.status(400).json({ error: "Rate must be a valid number" });
+      }
+      
+      if (rate <= 0) {
+        return res.status(400).json({ error: "Rate must be greater than 0" });
+      }
+      
+      if (rate > 10000) {
+        return res.status(400).json({ error: "Rate must not exceed 10000" });
       }
       
       const updated = await storage.updatePayoutRate(betType, rate);

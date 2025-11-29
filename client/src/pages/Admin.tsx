@@ -19,14 +19,14 @@ import {
   lotteryTypes, 
   lotteryTypeNames, 
   betTypes, 
-  betTypeNames, 
-  payoutRates,
+  betTypeNames,
   type LotteryType, 
   type BetType,
   type BlockedNumber,
   type User,
   type Transaction,
-  type Bet
+  type Bet,
+  type PayoutSetting
 } from "@shared/schema";
 import {
   Settings,
@@ -119,6 +119,8 @@ export default function Admin() {
   const [resultThreeBottom, setResultThreeBottom] = useState("");
   const [resultTwoTop, setResultTwoTop] = useState("");
   const [resultTwoBottom, setResultTwoBottom] = useState("");
+  const [editingPayoutRate, setEditingPayoutRate] = useState<string | null>(null);
+  const [editedRate, setEditedRate] = useState<string>("");
 
   const handleLogout = async () => {
     await logout();
@@ -156,6 +158,11 @@ export default function Admin() {
 
   const { data: lotteryResults = [], isLoading: isLoadingResults } = useQuery<LotteryResult[]>({
     queryKey: ["/api/lottery-results"],
+    enabled: isAdminAuthenticated,
+  });
+
+  const { data: payoutSettings = [], isLoading: isLoadingPayoutRates, isError: isPayoutRatesError } = useQuery<PayoutSetting[]>({
+    queryKey: ["/api/payout-rates"],
     enabled: isAdminAuthenticated,
   });
 
@@ -291,6 +298,27 @@ export default function Admin() {
     }
   });
 
+  const updatePayoutRateMutation = useMutation({
+    mutationFn: async ({ betType, rate }: { betType: string; rate: number }) => {
+      const res = await apiRequest("PATCH", `/api/payout-rates/${betType}`, { rate });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payout-rates"] });
+      setEditingPayoutRate(null);
+      setEditedRate("");
+      toast({
+        title: language === "th" ? "อัปเดตอัตราจ่ายแล้ว" : "Payout rate updated"
+      });
+    },
+    onError: () => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+
   const chartColors = [
     "hsl(var(--primary))",
     "hsl(var(--chart-2))",
@@ -388,6 +416,48 @@ export default function Admin() {
   const filteredBets = betFilter === "all" 
     ? allBets 
     : allBets.filter(b => b.status === betFilter);
+
+  const getPayoutRate = (betType: string): number | null => {
+    const setting = payoutSettings.find(s => s.betType === betType);
+    return setting ? setting.rate : null;
+  };
+
+  const handleSavePayoutRate = (betType: string) => {
+    const rate = parseFloat(editedRate);
+    if (isNaN(rate)) {
+      toast({
+        title: language === "th" ? "กรุณากรอกตัวเลขที่ถูกต้อง" : "Please enter a valid number",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (rate <= 0) {
+      toast({
+        title: language === "th" ? "อัตราจ่ายต้องมากกว่า 0" : "Rate must be greater than 0",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (rate > 10000) {
+      toast({
+        title: language === "th" ? "อัตราจ่ายต้องไม่เกิน 10,000" : "Rate must not exceed 10,000",
+        variant: "destructive"
+      });
+      return;
+    }
+    updatePayoutRateMutation.mutate({ betType, rate });
+  };
+
+  const handleStartEditPayoutRate = (betType: string) => {
+    const rate = getPayoutRate(betType);
+    setEditingPayoutRate(betType);
+    setEditedRate(rate !== null ? rate.toString() : "");
+  };
+
+  const handleCancelEditPayoutRate = () => {
+    setEditingPayoutRate(null);
+    setEditedRate("");
+  };
 
   const getUsernameById = (userId: number) => {
     const user = allUsers.find(u => u.id === userId);
@@ -1404,25 +1474,103 @@ export default function Admin() {
                 </CardTitle>
                 <CardDescription>
                   {language === "th" 
-                    ? "อัตราจ่ายปัจจุบัน" 
-                    : "Current payout rates"}
+                    ? "คลิกที่อัตราจ่ายเพื่อแก้ไข" 
+                    : "Click on a payout rate to edit"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {betTypes.map((type) => (
-                    <Card key={type} className="bg-card/50">
-                      <CardContent className="p-4 flex items-center justify-between gap-2">
-                        <span className="font-medium">
-                          {betTypeNames[type][language]}
-                        </span>
-                        <Badge variant="secondary" className="text-lg font-bold">
-                          x{payoutRates[type]}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                {isLoadingPayoutRates ? (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : isPayoutRatesError || payoutSettings.length < betTypes.length ? (
+                  <div className="p-8 text-center text-destructive">
+                    <XCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="font-medium">
+                      {language === "th" 
+                        ? "อัตราจ่ายไม่ครบถ้วน กรุณาตรวจสอบการตั้งค่าระบบหรือรีสตาร์ทเซิร์ฟเวอร์" 
+                        : "Payout rates are incomplete. Please check system configuration or restart the server."}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {language === "th" 
+                        ? `พบ ${payoutSettings.length}/${betTypes.length} รายการ` 
+                        : `Found ${payoutSettings.length}/${betTypes.length} rates`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {betTypes.map((type) => (
+                      <Card key={type} className="bg-card/50 hover-elevate">
+                        <CardContent className="p-4">
+                          {editingPayoutRate === type ? (
+                            <div className="flex flex-col gap-2">
+                              <span className="font-medium text-sm">
+                                {betTypeNames[type][language]}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">x</span>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.1"
+                                  max="10000"
+                                  value={editedRate}
+                                  onChange={(e) => setEditedRate(e.target.value)}
+                                  className="h-8 w-24 font-mono"
+                                  autoFocus
+                                  disabled={updatePayoutRateMutation.isPending}
+                                  data-testid={`input-payout-rate-${type}`}
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSavePayoutRate(type)}
+                                  disabled={updatePayoutRateMutation.isPending}
+                                  data-testid={`button-save-payout-rate-${type}`}
+                                >
+                                  {updatePayoutRateMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={handleCancelEditPayoutRate}
+                                  disabled={updatePayoutRateMutation.isPending}
+                                  data-testid={`button-cancel-payout-rate-${type}`}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div 
+                              className="flex items-center justify-between gap-2 cursor-pointer"
+                              onClick={() => handleStartEditPayoutRate(type)}
+                              data-testid={`payout-rate-row-${type}`}
+                            >
+                              <span className="font-medium">
+                                {betTypeNames[type][language]}
+                              </span>
+                              {getPayoutRate(type) !== null ? (
+                                <Badge variant="secondary" className="text-lg font-bold">
+                                  x{getPayoutRate(type)}
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-sm font-medium">
+                                  {language === "th" ? "ไม่พบอัตรา" : "Rate missing"}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

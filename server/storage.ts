@@ -256,22 +256,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPayoutRate(betType: string): Promise<number> {
+    const validBetTypes = [
+      "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
+      "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+    ];
+    
+    if (!validBetTypes.includes(betType)) {
+      throw new Error(`Invalid bet type: ${betType}`);
+    }
+    
     const [setting] = await db.select().from(payoutSettings).where(eq(payoutSettings.betType, betType));
     if (setting) {
       return setting.rate;
     }
-    const defaultRates: Record<string, number> = {
-      THREE_TOP: 900,
-      THREE_TOOD: 150,
-      THREE_FRONT: 450,
-      THREE_BOTTOM: 450,
-      THREE_REVERSE: 4500,
-      TWO_TOP: 90,
-      TWO_BOTTOM: 90,
-      RUN_TOP: 3.2,
-      RUN_BOTTOM: 4.2
-    };
-    return defaultRates[betType] || 1;
+    
+    throw new Error(`Payout rate not found for bet type: ${betType}. Please ensure payout rates are initialized.`);
   }
 
   async updatePayoutRate(betType: string, rate: number): Promise<PayoutSetting> {
