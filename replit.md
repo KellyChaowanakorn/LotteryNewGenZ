@@ -160,7 +160,7 @@ Preferred communication style: Simple, everyday language.
 - New file: server/telegram.ts with notification functions
 - Environment secrets: TELEGRAM_TOKEN and CHAT_ID stored in Replit Secrets
 - Notification types implemented:
-  1. **Customer Deposit Request** - Sent when user submits deposit request
+  1. **Customer Deposit Request** - Sent when user submits deposit request (shows "📎 มีสลิปแนบ" or "⚠️ ไม่มีสลิป")
   2. **Customer Withdrawal Request** - Sent when user submits withdrawal request
   3. **Customer Bet Placement** - Sent when user purchases lottery tickets (includes lottery type, bet type, numbers, amount)
   4. **Admin Approval** - Sent when admin approves deposit/withdrawal
@@ -168,3 +168,18 @@ Preferred communication style: Simple, everyday language.
 - All notifications include: username, user ID, amount, timestamp, transaction type
 - Bet notifications include detailed breakdown of each bet item
 - Admin action notifications include transaction ID for reference
+
+### Smart Checkout Flow (Nov 29, 2025)
+- **Balance-aware checkout**: Users with sufficient balance place bets directly; insufficient balance users see deposit modal
+- **Atomic transaction for bet placement**: 
+  - New storage method `createBetsWithBalanceDeduction` uses Drizzle transaction for all-or-nothing operation
+  - Creates all bets, deducts balance, and logs transaction in single atomic operation
+  - If any operation fails, entire transaction rolls back automatically
+- **Server-side validation**: Balance check performed inside transaction to prevent race conditions
+- **Frontend reliability**: Removed manual balance updates; relies on react-query cache invalidation to sync with server
+- **Flow**: Deposit → Admin approval → Balance credited → User shops → Smart checkout based on balance
+
+### Admin Slip Viewing (Nov 29, 2025)
+- Added slip image viewer in Admin page using Dialog component
+- Admins can view payment slips before approving/rejecting deposit requests
+- Shows "ดูสลิป" button when slip is available
