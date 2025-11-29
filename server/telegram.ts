@@ -130,3 +130,30 @@ ${betDetails}
   
   return sendTelegramMessage(message);
 }
+
+export interface AdminActionNotificationData {
+  username: string;
+  userId: number;
+  transactionType: 'deposit' | 'withdrawal';
+  amount: number;
+  action: 'approved' | 'rejected';
+  transactionId: number;
+}
+
+export async function sendAdminActionNotification(data: AdminActionNotificationData): Promise<boolean> {
+  const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+  
+  const actionEmoji = data.action === 'approved' ? '✅' : '❌';
+  const actionText = data.action === 'approved' ? 'อนุมัติแล้ว' : 'ปฏิเสธแล้ว';
+  const typeText = data.transactionType === 'deposit' ? 'ฝากเงิน' : 'ถอนเงิน';
+  
+  const message = `${actionEmoji} <b>Admin ${actionText}!</b>
+📋 ประเภท: ${typeText}
+👤 ผู้ใช้: ${data.username}
+🆔 ID: ${data.userId}
+💰 จำนวน: ${data.amount.toLocaleString()} บาท
+🔖 รหัสธุรกรรม: #${data.transactionId}
+⏰ เวลา: ${timestamp}`;
+  
+  return sendTelegramMessage(message);
+}

@@ -154,3 +154,17 @@ Preferred communication style: Simple, everyday language.
 - Admin UI shows blocking error state when payout settings are incomplete or fail to load
 - Displays count of found rates vs expected rates (e.g., "Found 7/9 rates") to help diagnose issues
 - Initialization of payout rates occurs at server startup via initializePayoutRates()
+
+### Telegram Notification System (Nov 29, 2025)
+- Real-time notifications via Telegram Bot API for all financial transactions
+- New file: server/telegram.ts with notification functions
+- Environment secrets: TELEGRAM_TOKEN and CHAT_ID stored in Replit Secrets
+- Notification types implemented:
+  1. **Customer Deposit Request** - Sent when user submits deposit request
+  2. **Customer Withdrawal Request** - Sent when user submits withdrawal request
+  3. **Customer Bet Placement** - Sent when user purchases lottery tickets (includes lottery type, bet type, numbers, amount)
+  4. **Admin Approval** - Sent when admin approves deposit/withdrawal
+  5. **Admin Rejection** - Sent when admin rejects deposit/withdrawal
+- All notifications include: username, user ID, amount, timestamp, transaction type
+- Bet notifications include detailed breakdown of each bet item
+- Admin action notifications include transaction ID for reference

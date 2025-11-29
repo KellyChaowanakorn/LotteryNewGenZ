@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
-import { sendPaymentNotification, sendWithdrawalNotification, sendBetNotification, sendTelegramMessage } from "./telegram";
+import { sendPaymentNotification, sendWithdrawalNotification, sendBetNotification, sendAdminActionNotification, sendTelegramMessage } from "./telegram";
 
 
 export async function registerRoutes(
@@ -400,6 +400,22 @@ export async function registerRoutes(
 
       if (status === "approved" && existingTx.type === "deposit") {
         await storage.updateUserBalance(existingTx.userId, existingTx.amount);
+      }
+
+      if (status === "approved" || status === "rejected") {
+        const user = await storage.getUser(existingTx.userId);
+        const username = user?.username || `User #${existingTx.userId}`;
+        
+        sendAdminActionNotification({
+          username,
+          userId: existingTx.userId,
+          transactionType: existingTx.type as 'deposit' | 'withdrawal',
+          amount: existingTx.amount,
+          action: status as 'approved' | 'rejected',
+          transactionId: id
+        }).catch(err => {
+          console.error("Failed to send admin action notification:", err);
+        });
       }
 
       res.json(transaction);
