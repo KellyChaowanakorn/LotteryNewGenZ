@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
+import { sendPaymentNotification, sendWithdrawalNotification, sendTelegramMessage } from "./telegram";
 
 
 export async function registerRoutes(
@@ -292,9 +293,38 @@ export async function registerRoutes(
         reference: `${type.toUpperCase()}${Date.now().toString(36).toUpperCase()}`,
       });
 
+      const user = await storage.getUser(userIdNum);
+      const username = user?.username || `User #${userIdNum}`;
+      
+      if (type === "deposit") {
+        sendPaymentNotification(username, amount).catch(err => {
+          console.error("Failed to send Telegram notification:", err);
+        });
+      } else if (type === "withdrawal") {
+        sendWithdrawalNotification(username, amount).catch(err => {
+          console.error("Failed to send Telegram notification:", err);
+        });
+      }
+
       res.json(transaction);
     } catch (error) {
       res.status(500).json({ error: "Failed to create transaction" });
+    }
+  });
+
+  app.post("/api/confirm_payment", async (req, res) => {
+    try {
+      const { user_name = "ไม่ระบุ", amount = "ไม่ระบุ" } = req.body;
+      const timestamp = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+      const message = `🚨 <b>โอนเงินใหม่!</b>\n👤 ${user_name}\n💰 ${amount} บาท\n⏰ ${timestamp}`;
+      const success = await sendTelegramMessage(message);
+      if (success) {
+        res.json({ status: "success" });
+      } else {
+        res.status(500).json({ status: "error" });
+      }
+    } catch (error) {
+      res.status(500).json({ status: "error" });
     }
   });
 
