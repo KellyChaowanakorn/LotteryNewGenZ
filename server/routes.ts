@@ -338,16 +338,41 @@ export async function registerRoutes(
     }
   });
 
+  const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.session?.isAdmin) {
+      return res.status(401).json({ error: "Admin authentication required" });
+    }
+    next();
+  };
+
   app.post("/api/admin/login", async (req, res) => {
     const { username, password } = req.body;
-    if (username === "admin" && password === "admin123") {
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      req.session.isAdmin = true;
       res.json({ success: true, message: "Admin login successful" });
     } else {
       res.status(401).json({ error: "Invalid admin credentials" });
     }
   });
 
-  app.get("/api/admin/users", async (req, res) => {
+  app.get("/api/admin/check", (req, res) => {
+    res.json({ isAdmin: req.session?.isAdmin === true });
+  });
+
+  app.post("/api/admin/logout", (req, res) => {
+    req.session.isAdmin = false;
+    req.session.destroy((err: any) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ success: true, message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const usersWithoutPassword = allUsers.map(({ password: _, ...user }) => user);
@@ -357,7 +382,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:id", async (req, res) => {
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -378,7 +403,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/stats", async (req, res) => {
+  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const allBets = await storage.getBets();

@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,8 @@ import {
   LineChart,
   PieChart,
   Trophy,
-  Play
+  Play,
+  LogOut
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -91,8 +93,19 @@ interface LotteryResult {
 
 export default function Admin() {
   const { language, t } = useI18n();
-  const { isAdminAuthenticated } = useAdmin();
+  const { isAdminAuthenticated, checkAdminStatus, logout } = useAdmin();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const verifyAdmin = async () => {
+      setIsCheckingAuth(true);
+      await checkAdminStatus();
+      setIsCheckingAuth(false);
+    };
+    verifyAdmin();
+  }, [checkAdminStatus]);
 
   const [newLotteryType, setNewLotteryType] = useState<LotteryType | "">("");
   const [newNumber, setNewNumber] = useState("");
@@ -107,29 +120,43 @@ export default function Admin() {
   const [resultTwoTop, setResultTwoTop] = useState("");
   const [resultTwoBottom, setResultTwoBottom] = useState("");
 
+  const handleLogout = async () => {
+    await logout();
+    toast({
+      title: language === "th" ? "ออกจากระบบแล้ว" : "Logged out successfully"
+    });
+    setLocation("/admin/login");
+  };
+
   const { data: blockedNumbers = [], isLoading } = useQuery<BlockedNumber[]>({
     queryKey: ["/api/blocked-numbers"],
+    enabled: isAdminAuthenticated,
   });
 
   const { data: allUsers = [], isLoading: isLoadingUsers } = useQuery<UserWithoutPassword[]>({
     queryKey: ["/api/admin/users"],
+    enabled: isAdminAuthenticated,
   });
 
   const { data: allTransactions = [], isLoading: isLoadingTransactions } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
+    enabled: isAdminAuthenticated,
   });
 
   const { data: allBets = [], isLoading: isLoadingBets } = useQuery<Bet[]>({
     queryKey: ["/api/bets"],
+    enabled: isAdminAuthenticated,
   });
 
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
     refetchInterval: 30000,
+    enabled: isAdminAuthenticated,
   });
 
   const { data: lotteryResults = [], isLoading: isLoadingResults } = useQuery<LotteryResult[]>({
     queryKey: ["/api/lottery-results"],
+    enabled: isAdminAuthenticated,
   });
 
   const addBlockedMutation = useMutation({
@@ -263,6 +290,21 @@ export default function Admin() {
       });
     }
   });
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-full flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="p-8">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            <p className="mt-4 text-muted-foreground">
+              {language === "th" ? "กำลังตรวจสอบสิทธิ์..." : "Verifying access..."}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAdminAuthenticated) {
     return (
@@ -455,16 +497,27 @@ export default function Admin() {
   return (
     <div className="min-h-full">
       <div className="bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4 md:p-6 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 rounded-xl">
-            <Settings className="h-6 w-6 text-primary" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <Settings className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold">{t("admin.title")}</h1>
+              <p className="text-sm text-muted-foreground">
+                {language === "th" ? "จัดการระบบ ผู้ใช้ และธุรกรรม" : "Manage system, users, and transactions"}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold">{t("admin.title")}</h1>
-            <p className="text-sm text-muted-foreground">
-              {language === "th" ? "จัดการระบบ ผู้ใช้ และธุรกรรม" : "Manage system, users, and transactions"}
-            </p>
-          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleLogout}
+            className="gap-2"
+            data-testid="button-admin-logout"
+          >
+            <LogOut className="h-4 w-4" />
+            {language === "th" ? "ออกจากระบบ" : "Logout"}
+          </Button>
         </div>
       </div>
 

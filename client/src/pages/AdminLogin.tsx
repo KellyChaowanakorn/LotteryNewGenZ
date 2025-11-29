@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { useAdmin } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { Shield, Lock, User } from "lucide-react";
 
 export default function AdminLogin() {
@@ -23,22 +24,30 @@ export default function AdminLogin() {
     e.preventDefault();
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (username === "admin" && password === "admin123") {
-      setAdminAuthenticated(true);
-      toast({
-        title: language === "th" ? "เข้าสู่ระบบสำเร็จ" : "Login successful"
-      });
-      setLocation("/admin");
-    } else {
+    try {
+      const response = await apiRequest("POST", "/api/admin/login", { username, password });
+      const data = await response.json();
+      
+      if (data.success) {
+        setAdminAuthenticated(true);
+        toast({
+          title: language === "th" ? "เข้าสู่ระบบสำเร็จ" : "Login successful"
+        });
+        setLocation("/admin");
+      } else {
+        toast({
+          title: language === "th" ? "ข้อมูลไม่ถูกต้อง" : "Invalid credentials",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
       toast({
         title: language === "th" ? "ข้อมูลไม่ถูกต้อง" : "Invalid credentials",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (

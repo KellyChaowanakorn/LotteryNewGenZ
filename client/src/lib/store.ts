@@ -68,13 +68,33 @@ export const useUser = create<UserState>()(
 interface AdminState {
   isAdminAuthenticated: boolean;
   setAdminAuthenticated: (value: boolean) => void;
+  checkAdminStatus: () => Promise<boolean>;
+  logout: () => Promise<void>;
 }
 
 export const useAdmin = create<AdminState>()(
   persist(
     (set) => ({
       isAdminAuthenticated: false,
-      setAdminAuthenticated: (value) => set({ isAdminAuthenticated: value })
+      setAdminAuthenticated: (value) => set({ isAdminAuthenticated: value }),
+      checkAdminStatus: async () => {
+        try {
+          const res = await fetch('/api/admin/check', { credentials: 'include' });
+          const data = await res.json();
+          set({ isAdminAuthenticated: data.isAdmin === true });
+          return data.isAdmin === true;
+        } catch {
+          set({ isAdminAuthenticated: false });
+          return false;
+        }
+      },
+      logout: async () => {
+        try {
+          await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+        } catch {
+        }
+        set({ isAdminAuthenticated: false });
+      }
     }),
     {
       name: 'qnq-admin'
