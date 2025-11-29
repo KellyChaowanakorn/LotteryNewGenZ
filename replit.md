@@ -147,3 +147,10 @@ Preferred communication style: Simple, everyday language.
   - Thai Stock: SET.or.th (ตลาดหลักทรัพย์แห่งประเทศไทย)
   - International stocks: Investing.com
   - Regional lotteries: Official lottery sites
+
+### Payout Rates Error Handling Enhancement (Nov 29, 2025)
+- Storage layer now throws explicit errors when payout rates are missing instead of silently using defaults
+- Bet creation endpoint catches payout rate errors and returns user-friendly "System configuration error" message
+- Admin UI shows blocking error state when payout settings are incomplete or fail to load
+- Displays count of found rates vs expected rates (e.g., "Found 7/9 rates") to help diagnose issues
+- Initialization of payout rates occurs at server startup via initializePayoutRates()
