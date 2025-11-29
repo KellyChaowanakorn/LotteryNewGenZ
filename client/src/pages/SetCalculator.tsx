@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,8 @@ import {
   Trash2, 
   ShoppingCart,
   CheckCircle,
-  X
+  X,
+  AlertCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -35,6 +36,24 @@ interface NumberSet {
   numbers: string[];
 }
 
+function getRequiredDigits(betType: BetType): number {
+  if (betType === "TWO_TOP" || betType === "TWO_BOTTOM") {
+    return 2;
+  }
+  if (betType === "RUN_TOP" || betType === "RUN_BOTTOM") {
+    return 1;
+  }
+  return 3;
+}
+
+function getDigitLabel(betType: BetType, language: string): string {
+  const digits = getRequiredDigits(betType);
+  if (language === "th") {
+    return digits === 1 ? "1 ตัว" : digits === 2 ? "2 ตัว" : "3 ตัว";
+  }
+  return digits === 1 ? "1 digit" : digits === 2 ? "2 digits" : "3 digits";
+}
+
 export default function SetCalculator() {
   const { language } = useI18n();
   const { toast } = useToast();
@@ -48,18 +67,57 @@ export default function SetCalculator() {
   const [lotteryType, setLotteryType] = useState<LotteryType>("THAI_GOV");
   const [betType, setBetType] = useState<BetType>("TWO_TOP");
 
-  const parseNumbers = (input: string): string[] => {
-    return input
+  const requiredDigits = getRequiredDigits(betType);
+
+  const parseAndValidate = (input: string) => {
+    const tokens = input
       .split(/[,\s\n]+/)
       .map(n => n.trim())
       .filter(n => /^\d+$/.test(n));
+    
+    const validNumbers: string[] = [];
+    const invalidNumbers: string[] = [];
+    
+    tokens.forEach(token => {
+      const paddedToken = token.padStart(requiredDigits, '0');
+      if (paddedToken.length === requiredDigits) {
+        validNumbers.push(paddedToken);
+      } else {
+        invalidNumbers.push(token);
+      }
+    });
+    
+    return { validNumbers, invalidNumbers };
   };
 
+  const { validNumbers: currentValidNumbers, invalidNumbers: currentInvalidNumbers } = 
+    useMemo(() => parseAndValidate(currentInput), [currentInput, requiredDigits]);
+
+  useEffect(() => {
+    if (sets.length > 0) {
+      const hasInvalidSets = sets.some(set => 
+        set.numbers.some(n => n.length !== requiredDigits)
+      );
+      if (hasInvalidSets) {
+        toast({
+          title: language === "th" ? "ประเภทแทงเปลี่ยน" : "Bet type changed",
+          description: language === "th" 
+            ? `กรุณาล้างชุดเก่าเพื่อเพิ่มเลข ${getDigitLabel(betType, language)} ใหม่`
+            : `Please clear old sets to add new ${getDigitLabel(betType, language)} numbers`,
+          variant: "destructive"
+        });
+        setSets([]);
+      }
+    }
+  }, [betType]);
+
   const handleAddSet = () => {
-    const numbers = parseNumbers(currentInput);
-    if (numbers.length === 0) {
+    if (currentValidNumbers.length === 0) {
       toast({
         title: language === "th" ? "กรุณาใส่เลข" : "Please enter numbers",
+        description: language === "th" 
+          ? `ต้องเป็นเลข ${getDigitLabel(betType, language)} เท่านั้น`
+          : `Must be ${getDigitLabel(betType, language)} only`,
         variant: "destructive"
       });
       return;
@@ -67,7 +125,7 @@ export default function SetCalculator() {
 
     const newSet: NumberSet = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      numbers
+      numbers: currentValidNumbers
     };
 
     setSets(prev => [...prev, newSet]);
@@ -76,8 +134,8 @@ export default function SetCalculator() {
     toast({
       title: language === "th" ? `เพิ่มชุดที่ ${sets.length + 1} แล้ว` : `Added Set ${sets.length + 1}`,
       description: language === "th" 
-        ? `${numbers.length} เลข: ${numbers.join(", ")}`
-        : `${numbers.length} numbers: ${numbers.join(", ")}`
+        ? `${currentValidNumbers.length} เลข: ${currentValidNumbers.join(", ")}`
+        : `${currentValidNumbers.length} numbers: ${currentValidNumbers.join(", ")}`
     });
   };
 
@@ -161,8 +219,6 @@ export default function SetCalculator() {
     handleClearAll();
   };
 
-  const currentNumbers = parseNumbers(currentInput);
-
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -196,24 +252,37 @@ export default function SetCalculator() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="numbers">
-                    {language === "th" ? "ใส่เลข" : "Enter Numbers"}
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="numbers">
+                      {language === "th" ? "ใส่เลข" : "Enter Numbers"}
+                    </Label>
+                    <Badge variant="outline" className="text-xs">
+                      {getDigitLabel(betType, language)}
+                    </Badge>
+                  </div>
                   <Textarea
                     id="numbers"
                     placeholder={language === "th" 
-                      ? "ตัวอย่าง: 12, 34, 56, 78" 
-                      : "Example: 12, 34, 56, 78"}
+                      ? `ตัวอย่าง: ${requiredDigits === 1 ? "1, 2, 3, 4" : requiredDigits === 2 ? "12, 34, 56, 78" : "123, 456, 789"}` 
+                      : `Example: ${requiredDigits === 1 ? "1, 2, 3, 4" : requiredDigits === 2 ? "12, 34, 56, 78" : "123, 456, 789"}`}
                     value={currentInput}
                     onChange={(e) => setCurrentInput(e.target.value)}
                     className="min-h-[100px] font-mono"
                     data-testid="textarea-numbers"
                   />
-                  {currentNumbers.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
+                  {currentValidNumbers.length > 0 && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
                       {language === "th" 
-                        ? `พบ ${currentNumbers.length} เลข: ${currentNumbers.join(", ")}`
-                        : `Found ${currentNumbers.length} numbers: ${currentNumbers.join(", ")}`}
+                        ? `ถูกต้อง ${currentValidNumbers.length} เลข: ${currentValidNumbers.join(", ")}`
+                        : `Valid ${currentValidNumbers.length} numbers: ${currentValidNumbers.join(", ")}`}
+                    </p>
+                  )}
+                  {currentInvalidNumbers.length > 0 && (
+                    <p className="text-sm text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {language === "th" 
+                        ? `ไม่ถูกต้อง (ต้อง ${getDigitLabel(betType, language)}): ${currentInvalidNumbers.join(", ")}`
+                        : `Invalid (must be ${getDigitLabel(betType, language)}): ${currentInvalidNumbers.join(", ")}`}
                     </p>
                   )}
                 </div>
@@ -221,7 +290,7 @@ export default function SetCalculator() {
                 <Button 
                   className="w-full" 
                   onClick={handleAddSet}
-                  disabled={currentNumbers.length === 0}
+                  disabled={currentValidNumbers.length === 0}
                   data-testid="button-add-set"
                 >
                   <Plus className="h-4 w-4 mr-2" />
