@@ -81,6 +81,7 @@ export const users = pgTable("users", {
   referralCode: text("referral_code").notNull().unique(),
   referredBy: text("referred_by"),
   affiliateEarnings: real("affiliate_earnings").notNull().default(0),
+  isBlocked: boolean("is_blocked").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow()
 });
 

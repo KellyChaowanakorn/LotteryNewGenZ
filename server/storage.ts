@@ -21,9 +21,11 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByReferralCode(code: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(userId: number, amount: number): Promise<User | undefined>;
   updateUserAffiliateEarnings(userId: number, amount: number): Promise<User | undefined>;
+  updateUserBlockStatus(userId: number, isBlocked: boolean): Promise<User | undefined>;
 
   getBets(userId?: number): Promise<Bet[]>;
   getBet(id: number): Promise<Bet | undefined>;
@@ -41,6 +43,7 @@ export interface IStorage {
   updateTransactionStatus(id: number, status: string): Promise<Transaction | undefined>;
 
   getAffiliates(referrerId: number): Promise<Affiliate[]>;
+  getAllAffiliates(): Promise<Affiliate[]>;
   createAffiliate(referrerId: number, referredId: number): Promise<Affiliate>;
   updateAffiliateStats(referredId: number, betAmount: number): Promise<void>;
 }
@@ -61,6 +64,10 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
@@ -79,6 +86,15 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .update(users)
       .set({ affiliateEarnings: sql`${users.affiliateEarnings} + ${amount}` })
+      .where(eq(users.id, userId))
+      .returning();
+    return user || undefined;
+  }
+
+  async updateUserBlockStatus(userId: number, isBlocked: boolean): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ isBlocked })
       .where(eq(users.id, userId))
       .returning();
     return user || undefined;
@@ -160,6 +176,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAffiliates(referrerId: number): Promise<Affiliate[]> {
     return db.select().from(affiliates).where(eq(affiliates.referrerId, referrerId));
+  }
+
+  async getAllAffiliates(): Promise<Affiliate[]> {
+    return db.select().from(affiliates);
   }
 
   async createAffiliate(referrerId: number, referredId: number): Promise<Affiliate> {

@@ -294,16 +294,28 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
       }
-      const { status, userId, amount } = req.body;
+      const { status } = req.body;
+      if (!status || !["approved", "rejected", "pending"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
+      const allTransactions = await storage.getAllTransactions();
+      const existingTx = allTransactions.find(t => t.id === id);
+      if (!existingTx) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+
+      if (existingTx.status !== "pending") {
+        return res.status(400).json({ error: "Transaction already processed" });
+      }
       
       const transaction = await storage.updateTransactionStatus(id, status);
       if (!transaction) {
         return res.status(404).json({ error: "Transaction not found" });
       }
 
-      if (status === "approved" && transaction.type === "deposit" && userId && amount) {
-        const userIdNum = typeof userId === "string" ? parseInt(userId, 10) : userId;
-        await storage.updateUserBalance(userIdNum, amount);
+      if (status === "approved" && existingTx.type === "deposit") {
+        await storage.updateUserBalance(existingTx.userId, existingTx.amount);
       }
 
       res.json(transaction);
@@ -369,6 +381,86 @@ export async function registerRoutes(
       res.json({ success: true, message: "Admin login successful" });
     } else {
       res.status(401).json({ error: "Invalid admin credentials" });
+    }
+  });
+
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const usersWithoutPassword = allUsers.map(({ password: _, ...user }) => user);
+      res.json(usersWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const { isBlocked } = req.body;
+      if (typeof isBlocked !== "boolean") {
+        return res.status(400).json({ error: "isBlocked must be a boolean" });
+      }
+      const user = await storage.updateUserBlockStatus(id, isBlocked);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allBets = await storage.getBets();
+      const allTransactions = await storage.getAllTransactions();
+      const allAffiliates = await storage.getAllAffiliates();
+
+      const pendingDeposits = allTransactions.filter(
+        (t) => t.type === "deposit" && t.status === "pending"
+      );
+      const approvedDeposits = allTransactions.filter(
+        (t) => t.type === "deposit" && t.status === "approved"
+      );
+      const totalDeposits = approvedDeposits.reduce((sum, t) => sum + t.amount, 0);
+
+      const totalBetAmount = allBets.reduce((sum, b) => sum + b.amount, 0);
+      const pendingBets = allBets.filter((b) => b.status === "pending");
+      const wonBets = allBets.filter((b) => b.status === "won");
+      const lostBets = allBets.filter((b) => b.status === "lost");
+
+      const totalAffiliateCommission = allAffiliates.reduce((sum, a) => sum + a.commission, 0);
+
+      res.json({
+        users: {
+          total: allUsers.length,
+          blocked: allUsers.filter((u) => u.isBlocked).length,
+          active: allUsers.filter((u) => !u.isBlocked).length,
+        },
+        bets: {
+          total: allBets.length,
+          pending: pendingBets.length,
+          won: wonBets.length,
+          lost: lostBets.length,
+          totalAmount: totalBetAmount,
+        },
+        transactions: {
+          pendingDeposits: pendingDeposits.length,
+          totalDeposits,
+        },
+        affiliates: {
+          total: allAffiliates.length,
+          totalCommission: totalAffiliateCommission,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
 
