@@ -3,17 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
 
-const payoutRates: Record<string, number> = {
-  THREE_TOP: 900,
-  THREE_TOOD: 150,
-  THREE_FRONT: 450,
-  THREE_BOTTOM: 450,
-  THREE_REVERSE: 4500,
-  TWO_TOP: 90,
-  TWO_BOTTOM: 90,
-  RUN_TOP: 3.2,
-  RUN_BOTTOM: 4.2,
-};
 
 export async function registerRoutes(
   httpServer: Server,
@@ -192,7 +181,8 @@ export async function registerRoutes(
 
       for (const item of items) {
         const { lotteryType, betType, numbers, amount } = item;
-        const potentialWin = amount * (payoutRates[betType] || 1);
+        const payoutRate = await storage.getPayoutRate(betType);
+        const potentialWin = amount * payoutRate;
 
         const blocked = await storage.getBlockedNumbers(lotteryType);
         const isBlocked = blocked.some(
@@ -832,6 +822,49 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch stock data" });
     }
   });
+
+  app.get("/api/payout-rates", async (req, res) => {
+    try {
+      const settings = await storage.getPayoutSettings();
+      if (settings.length === 0) {
+        await storage.initializePayoutRates();
+        const initializedSettings = await storage.getPayoutSettings();
+        return res.json(initializedSettings);
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching payout rates:", error);
+      res.status(500).json({ error: "Failed to fetch payout rates" });
+    }
+  });
+
+  app.patch("/api/payout-rates/:betType", requireAdmin, async (req, res) => {
+    try {
+      const { betType } = req.params;
+      const { rate } = req.body;
+      
+      if (typeof rate !== "number" || rate <= 0) {
+        return res.status(400).json({ error: "Rate must be a positive number" });
+      }
+      
+      const validBetTypes = [
+        "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
+        "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+      ];
+      
+      if (!validBetTypes.includes(betType)) {
+        return res.status(400).json({ error: "Invalid bet type" });
+      }
+      
+      const updated = await storage.updatePayoutRate(betType, rate);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating payout rate:", error);
+      res.status(500).json({ error: "Failed to update payout rate" });
+    }
+  });
+
+  await storage.initializePayoutRates();
 
   return httpServer;
 }
