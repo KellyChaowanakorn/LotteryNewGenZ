@@ -24,7 +24,7 @@ import { PaymentModal } from "./PaymentModal";
 export function CartSheet() {
   const { language, t } = useI18n();
   const { items, removeItem, clearCart, getTotal, getTotalPotentialWin } = useCart();
-  const { user, updateBalance } = useUser();
+  const { user } = useUser();
   const { toast } = useToast();
   const [showPayment, setShowPayment] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -54,7 +54,6 @@ export function CartSheet() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
       queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}`] });
-      updateBalance(userBalance - total);
       clearCart();
       setIsOpen(false);
       toast({

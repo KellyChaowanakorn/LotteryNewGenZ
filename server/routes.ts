@@ -183,17 +183,8 @@ export async function registerRoutes(
       }
 
       const totalAmount = items.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-      
-      if (user.balance < totalAmount) {
-        return res.status(400).json({ 
-          error: "Insufficient balance",
-          required: totalAmount,
-          available: user.balance
-        });
-      }
 
-      const createdBets = [];
-
+      const betInserts = [];
       for (const item of items) {
         const { lotteryType, betType, numbers, amount } = item;
         
@@ -221,7 +212,7 @@ export async function registerRoutes(
           return res.status(400).json({ error: `Number ${numbers} is blocked` });
         }
 
-        const bet = await storage.createBet({
+        betInserts.push({
           userId: userIdNum,
           lotteryType,
           betType,
@@ -231,20 +222,13 @@ export async function registerRoutes(
           status: "pending",
           drawDate: new Date().toISOString().split("T")[0],
         });
-
-        createdBets.push(bet);
       }
 
-      await storage.updateUserBalance(userIdNum, -totalAmount);
-
-      await storage.createTransaction({
-        userId: userIdNum,
-        type: "bet",
-        amount: -totalAmount,
-        status: "approved",
-        slipUrl: null,
-        reference: `BET${Date.now().toString(36).toUpperCase()}`,
-      });
+      const { bets: createdBets } = await storage.createBetsWithBalanceDeduction(
+        userIdNum,
+        betInserts,
+        totalAmount
+      );
 
       await storage.updateAffiliateStats(userIdNum, totalAmount);
 
@@ -267,8 +251,14 @@ export async function registerRoutes(
       });
 
       res.json({ bets: createdBets, totalAmount });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bet creation error:", error);
+      if (error.message === "Insufficient balance") {
+        return res.status(400).json({ error: "Insufficient balance" });
+      }
+      if (error.message === "User not found") {
+        return res.status(404).json({ error: "User not found" });
+      }
       res.status(500).json({ error: "Failed to create bets" });
     }
   });

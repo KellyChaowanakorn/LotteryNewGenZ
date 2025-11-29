@@ -36,6 +36,7 @@ export interface IStorage {
   getBets(userId?: number): Promise<Bet[]>;
   getBet(id: number): Promise<Bet | undefined>;
   createBet(bet: InsertBet): Promise<Bet>;
+  createBetsWithBalanceDeduction(userId: number, betItems: InsertBet[], totalAmount: number): Promise<{ bets: Bet[], transaction: Transaction }>;
   updateBetStatus(id: number, status: string): Promise<Bet | undefined>;
 
   getBlockedNumbers(lotteryType?: string): Promise<BlockedNumber[]>;
@@ -132,6 +133,43 @@ export class DatabaseStorage implements IStorage {
   async createBet(insertBet: InsertBet): Promise<Bet> {
     const [bet] = await db.insert(bets).values(insertBet).returning();
     return bet;
+  }
+
+  async createBetsWithBalanceDeduction(
+    userId: number, 
+    betItems: InsertBet[], 
+    totalAmount: number
+  ): Promise<{ bets: Bet[], transaction: Transaction }> {
+    return db.transaction(async (tx) => {
+      const [user] = await tx.select().from(users).where(eq(users.id, userId));
+      if (!user) {
+        throw new Error("User not found");
+      }
+      if (user.balance < totalAmount) {
+        throw new Error("Insufficient balance");
+      }
+
+      const createdBets: Bet[] = [];
+      for (const betItem of betItems) {
+        const [bet] = await tx.insert(bets).values(betItem).returning();
+        createdBets.push(bet);
+      }
+
+      await tx.update(users)
+        .set({ balance: sql`${users.balance} - ${totalAmount}` })
+        .where(eq(users.id, userId));
+
+      const [transaction] = await tx.insert(transactions).values({
+        userId,
+        type: "bet",
+        amount: -totalAmount,
+        status: "approved",
+        slipUrl: null,
+        reference: `BET${Date.now().toString(36).toUpperCase()}`,
+      }).returning();
+
+      return { bets: createdBets, transaction };
+    });
   }
 
   async updateBetStatus(id: number, status: string): Promise<Bet | undefined> {
