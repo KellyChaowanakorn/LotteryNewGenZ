@@ -81,6 +81,90 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/bet-limits", async (req, res) => {
+    try {
+      const limits = await storage.getBetLimits();
+      res.json(limits);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bet limits" });
+    }
+  });
+
+  app.get("/api/bet-limits/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const limit = await storage.getBetLimit(id);
+      if (!limit) {
+        return res.status(404).json({ error: "Bet limit not found" });
+      }
+      res.json(limit);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bet limit" });
+    }
+  });
+
+  app.post("/api/bet-limits", requireAdmin, async (req, res) => {
+    try {
+      const { number, maxAmount, isActive = true, lotteryTypes = [] } = req.body;
+      if (!number || maxAmount === undefined) {
+        return res.status(400).json({ error: "Missing required fields: number and maxAmount" });
+      }
+      if (typeof maxAmount !== "number" || maxAmount <= 0) {
+        return res.status(400).json({ error: "maxAmount must be a positive number" });
+      }
+      const limit = await storage.createBetLimit(
+        { number, maxAmount, isActive },
+        lotteryTypes
+      );
+      res.json(limit);
+    } catch (error) {
+      console.error("Create bet limit error:", error);
+      res.status(500).json({ error: "Failed to create bet limit" });
+    }
+  });
+
+  app.patch("/api/bet-limits/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const { number, maxAmount, isActive, lotteryTypes } = req.body;
+      
+      const updateData: { number?: string; maxAmount?: number; isActive?: boolean } = {};
+      if (number !== undefined) updateData.number = number;
+      if (maxAmount !== undefined) updateData.maxAmount = maxAmount;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      const limit = await storage.updateBetLimit(id, updateData, lotteryTypes);
+      if (!limit) {
+        return res.status(404).json({ error: "Bet limit not found" });
+      }
+      res.json(limit);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update bet limit" });
+    }
+  });
+
+  app.delete("/api/bet-limits/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const deleted = await storage.deleteBetLimit(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Bet limit not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete bet limit" });
+    }
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { username, password, referralCode } = req.body;
