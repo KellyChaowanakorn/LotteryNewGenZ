@@ -26,6 +26,7 @@ import {
   LogIn,
   LogOut,
   Wallet,
+  Calculator,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -37,6 +38,7 @@ export function AppSidebar() {
   const mainMenuItems = [
     { title: t("nav.home"), url: "/", icon: Home },
     { title: t("nav.results"), url: "/results", icon: Trophy },
+    { title: language === "th" ? "คำนวณหวยชุด" : "Set Calculator", url: "/calculator", icon: Calculator },
     { title: t("nav.affiliate"), url: "/affiliate", icon: Users },
   ];
 
