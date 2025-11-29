@@ -43,6 +43,25 @@ interface StockData {
   marketState: string;
 }
 
+interface HanoiLotteryData {
+  date: string;
+  firstPrize: string;
+  twoDigit: string;
+  threeDigit: string;
+  prizes: {
+    special: string;
+    g1: string[];
+    g2: string[];
+    g3: string[];
+    g4: string[];
+    g5: string[];
+    g6: string[];
+    g7: string[];
+  };
+  isLive: boolean;
+  source: string;
+}
+
 interface ThaiLottoApiResponse {
   status: string;
   response: {
@@ -254,6 +273,141 @@ function StockResultCard({ type, stockData, isLoading }: {
   );
 }
 
+function HanoiResultCard({ hanoiData, isLoading }: { 
+  hanoiData?: HanoiLotteryData | null;
+  isLoading?: boolean;
+}) {
+  const { language } = useI18n();
+  const name = lotteryTypeNames.HANOI[language];
+  const externalUrl = externalUrls.HANOI;
+  const siteName = externalUrlNames.HANOI[language];
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{name}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Skeleton className="h-10 w-32" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="hover-elevate transition-all" data-testid="card-result-HANOI">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base">{name}</CardTitle>
+          {hanoiData ? (
+            <Badge variant="secondary" className="gap-1">
+              <Wifi className="h-3 w-3" />
+              LIVE
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1">
+              <ExternalLink className="h-3 w-3" />
+              {language === "th" ? "ลิงก์ภายนอก" : "External"}
+            </Badge>
+          )}
+        </div>
+        {hanoiData && (
+          <CardDescription className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {hanoiData.date}
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {hanoiData ? (
+          <>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">
+                {language === "th" ? "รางวัลพิเศษ" : "Special Prize"}
+              </p>
+              <div className="text-2xl font-bold font-mono tracking-widest text-primary">
+                {hanoiData.firstPrize}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {language === "th" ? "3 ตัวท้าย" : "Last 3 Digits"}
+                </p>
+                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
+                  {hanoiData.threeDigit}
+                </Badge>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {language === "th" ? "2 ตัวท้าย" : "Last 2 Digits"}
+                </p>
+                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
+                  {hanoiData.twoDigit}
+                </Badge>
+              </div>
+            </div>
+
+            {hanoiData.prizes.g7 && hanoiData.prizes.g7.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {language === "th" ? "รางวัลเลข 2 ตัว" : "2-Digit Prizes"}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {hanoiData.prizes.g7.slice(0, 4).map((num, i) => (
+                    <Badge key={i} variant="secondary" className="font-mono text-sm">
+                      {num}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            <Globe className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-sm">
+              {language === "th" 
+                ? "กดปุ่มด้านล่างเพื่อดูผลหวยล่าสุด" 
+                : "Click below to view latest results"}
+            </p>
+          </div>
+        )}
+
+        <a 
+          href={externalUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
+          data-testid="button-external-HANOI"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-full bg-emerald-500/20">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
+              </p>
+              <p className="text-sm font-semibold text-foreground">{siteName}</p>
+            </div>
+          </div>
+          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
+            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+        </a>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ResultCard({ type, thaiGovResult, isLoading, isError }: { 
   type: LotteryType; 
   thaiGovResult?: ResultData | null;
@@ -436,11 +590,17 @@ export default function Results() {
     retry: 2
   });
 
+  const { data: hanoiData, isLoading: isLoadingHanoi, refetch: refetchHanoi } = useQuery<HanoiLotteryData>({
+    queryKey: ["/api/hanoi-lottery"],
+    staleTime: 1000 * 60 * 5,
+    retry: 2
+  });
+
   const thaiGovResult = thaiGovData ? parseThaiLottoResult(thaiGovData) : null;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([refetchThaiGov(), refetchStock()]);
+    await Promise.all([refetchThaiGov(), refetchStock(), refetchHanoi()]);
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
@@ -521,6 +681,12 @@ export default function Results() {
                       type={type} 
                       stockData={stockData?.[type] || null}
                       isLoading={isLoadingStock}
+                    />
+                  ) : type === "HANOI" ? (
+                    <HanoiResultCard 
+                      key={type}
+                      hanoiData={hanoiData || null}
+                      isLoading={isLoadingHanoi}
                     />
                   ) : (
                     <ResultCard 

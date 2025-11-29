@@ -683,6 +683,78 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/hanoi-lottery", async (req, res) => {
+    try {
+      const response = await fetch(
+        "https://raw.githubusercontent.com/khiemdoan/vietnam-lottery-xsmb-analysis/refs/heads/main/data/xsmb.json",
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        return res.status(404).json({ error: "No data available" });
+      }
+
+      const latest = data[data.length - 1];
+      
+      const firstPrize = String(latest.prize1 || "");
+      const twoDigit = firstPrize.slice(-2);
+      const threeDigit = firstPrize.slice(-3);
+
+      const g7 = [
+        String(latest.prize7_1 || ""),
+        String(latest.prize7_2 || ""),
+        String(latest.prize7_3 || ""),
+        String(latest.prize7_4 || "")
+      ].filter(n => n);
+
+      res.json({
+        date: latest.date,
+        firstPrize,
+        twoDigit,
+        threeDigit,
+        prizes: {
+          special: firstPrize,
+          g1: [String(latest.prize2_1 || ""), String(latest.prize2_2 || "")].filter(n => n),
+          g2: [],
+          g3: [
+            String(latest.prize3_1 || ""), String(latest.prize3_2 || ""), 
+            String(latest.prize3_3 || ""), String(latest.prize3_4 || ""),
+            String(latest.prize3_5 || ""), String(latest.prize3_6 || "")
+          ].filter(n => n),
+          g4: [
+            String(latest.prize4_1 || ""), String(latest.prize4_2 || ""),
+            String(latest.prize4_3 || ""), String(latest.prize4_4 || "")
+          ].filter(n => n),
+          g5: [
+            String(latest.prize5_1 || ""), String(latest.prize5_2 || ""),
+            String(latest.prize5_3 || ""), String(latest.prize5_4 || ""),
+            String(latest.prize5_5 || ""), String(latest.prize5_6 || "")
+          ].filter(n => n),
+          g6: [
+            String(latest.prize6_1 || ""), String(latest.prize6_2 || ""),
+            String(latest.prize6_3 || "")
+          ].filter(n => n),
+          g7
+        },
+        isLive: true,
+        source: "Vietnam XSMB Daily Data"
+      });
+    } catch (error) {
+      console.error("Error fetching Hanoi lottery data:", error);
+      res.status(500).json({ error: "Failed to fetch Hanoi lottery data" });
+    }
+  });
+
   app.get("/api/stock-data", async (req, res) => {
     try {
       const results: Record<string, any> = {};
