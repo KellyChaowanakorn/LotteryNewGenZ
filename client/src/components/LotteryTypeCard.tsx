@@ -6,7 +6,6 @@ import {
   TrendingUp, 
   Globe, 
   Landmark,
-  Timer,
   Dice1
 } from "lucide-react";
 
@@ -28,7 +27,6 @@ const lotteryIcons: Record<LotteryType, JSX.Element> = {
   HANOI: <Globe className="h-6 w-6" />,
   MALAYSIA: <Globe className="h-6 w-6" />,
   SINGAPORE: <Globe className="h-6 w-6" />,
-  YEEKEE: <Timer className="h-6 w-6" />,
   KENO: <Dice1 className="h-6 w-6" />
 };
 
@@ -43,7 +41,6 @@ const lotteryColors: Record<LotteryType, string> = {
   HANOI: "from-teal-600 to-teal-800",
   MALAYSIA: "from-cyan-600 to-cyan-800",
   SINGAPORE: "from-pink-600 to-pink-800",
-  YEEKEE: "from-orange-600 to-orange-800",
   KENO: "from-violet-600 to-violet-800"
 };
 

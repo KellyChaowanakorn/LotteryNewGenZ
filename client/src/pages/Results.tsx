@@ -15,7 +15,9 @@ import {
   Landmark,
   TrendingUp,
   Globe,
-  Zap
+  Zap,
+  ShieldCheck,
+  ArrowUpRight
 } from "lucide-react";
 import { useState } from "react";
 
@@ -73,30 +75,28 @@ const externalUrls: Record<LotteryType, string> = {
   HANOI: "https://www.sealotto.com/en/vietnam/hanoi",
   MALAYSIA: "https://www.check4d.org/",
   SINGAPORE: "https://www.singaporepools.com.sg/en/product/Pages/4d_results.aspx",
-  YEEKEE: "https://lotto.mthai.com/lottery/yeekee",
-  KENO: "https://lotto.mthai.com/lottery/keno"
+  KENO: "https://nclottery.com/keno-results"
 };
 
 const externalUrlNames: Record<LotteryType, { th: string; en: string }> = {
   THAI_GOV: { th: "สำนักงานสลากกินแบ่งรัฐบาล", en: "GLO Official" },
-  THAI_STOCK: { th: "MThai หวยหุ้น", en: "MThai Stock Lottery" },
-  STOCK_NIKKEI: { th: "Investing.com Nikkei", en: "Investing.com Nikkei" },
-  STOCK_DOW: { th: "Investing.com Dow Jones", en: "Investing.com Dow Jones" },
-  STOCK_FTSE: { th: "Investing.com FTSE", en: "Investing.com FTSE" },
-  STOCK_DAX: { th: "Investing.com DAX", en: "Investing.com DAX" },
-  LAO: { th: "Sanook หวยลาว", en: "Sanook Lao Lottery" },
-  HANOI: { th: "SEA Lotto ฮานอย", en: "SEA Lotto Hanoi" },
-  MALAYSIA: { th: "Check4D Malaysia", en: "Check4D Malaysia" },
-  SINGAPORE: { th: "Singapore Pools 4D", en: "Singapore Pools 4D" },
-  YEEKEE: { th: "MThai ยี่กี", en: "MThai Yeekee" },
-  KENO: { th: "MThai Keno", en: "MThai Keno" }
+  THAI_STOCK: { th: "SET Index", en: "SET Index" },
+  STOCK_NIKKEI: { th: "Investing.com", en: "Investing.com" },
+  STOCK_DOW: { th: "Investing.com", en: "Investing.com" },
+  STOCK_FTSE: { th: "Investing.com", en: "Investing.com" },
+  STOCK_DAX: { th: "Investing.com", en: "Investing.com" },
+  LAO: { th: "Sanook หวยลาว", en: "Sanook Lao" },
+  HANOI: { th: "SEA Lotto", en: "SEA Lotto" },
+  MALAYSIA: { th: "Check4D", en: "Check4D" },
+  SINGAPORE: { th: "Singapore Pools", en: "Singapore Pools" },
+  KENO: { th: "NC Lottery", en: "NC Lottery" }
 };
 
 const categories = {
   thai: ["THAI_GOV", "THAI_STOCK"] as LotteryType[],
   stock: ["STOCK_NIKKEI", "STOCK_DOW", "STOCK_FTSE", "STOCK_DAX"] as LotteryType[],
   foreign: ["LAO", "HANOI", "MALAYSIA", "SINGAPORE"] as LotteryType[],
-  instant: ["YEEKEE", "KENO"] as LotteryType[]
+  instant: ["KENO"] as LotteryType[]
 };
 
 const categoryIcons = {
@@ -227,18 +227,28 @@ function StockResultCard({ type, stockData, isLoading }: {
           </div>
         )}
 
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full gap-2" 
-          asChild
+        <a 
+          href={externalUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
           data-testid={`button-external-${type}`}
         >
-          <a href={externalUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4" />
-            {language === "th" ? `เปิด ${siteName}` : `Open ${siteName}`}
-          </a>
-        </Button>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-full bg-emerald-500/20">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
+              </p>
+              <p className="text-sm font-semibold text-foreground">{siteName}</p>
+            </div>
+          </div>
+          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
+            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+        </a>
       </CardContent>
     </Card>
   );
@@ -356,27 +366,38 @@ function ResultCard({ type, thaiGovResult, isLoading, isError }: {
             </div>
           </>
         ) : (
-          <div className="text-center py-2 text-muted-foreground">
-            <p className="text-sm mb-3">
+          <div className="text-center py-4 text-muted-foreground">
+            <Globe className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-sm">
               {language === "th" 
-                ? "กดปุ่มด้านล่างเพื่อเช็คผลหวยล่าสุด" 
-                : "Click button below to check latest results"}
+                ? "กดปุ่มด้านล่างเพื่อดูผลหวยล่าสุด" 
+                : "Click below to view latest results"}
             </p>
           </div>
         )}
 
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full gap-2" 
-          asChild
+        <a 
+          href={externalUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
           data-testid={`button-external-${type}`}
         >
-          <a href={externalUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4" />
-            {language === "th" ? `เปิด ${siteName}` : `Open ${siteName}`}
-          </a>
-        </Button>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-full bg-emerald-500/20">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
+              </p>
+              <p className="text-sm font-semibold text-foreground">{siteName}</p>
+            </div>
+          </div>
+          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
+            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+        </a>
       </CardContent>
     </Card>
   );

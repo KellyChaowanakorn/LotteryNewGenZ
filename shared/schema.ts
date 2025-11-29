@@ -14,7 +14,6 @@ export const lotteryTypes = [
   "HANOI",
   "MALAYSIA",
   "SINGAPORE",
-  "YEEKEE",
   "KENO"
 ] as const;
 
@@ -57,7 +56,6 @@ export const lotteryTypeNames: Record<LotteryType, { th: string; en: string }> =
   HANOI: { th: "หวยฮานอย", en: "Hanoi Lottery" },
   MALAYSIA: { th: "หวยมาเลย์", en: "Malaysia Lottery" },
   SINGAPORE: { th: "หวยสิงคโปร์", en: "Singapore Lottery" },
-  YEEKEE: { th: "หวยยี่กี", en: "Yeekee Lottery" },
   KENO: { th: "หวย Keno", en: "Keno Lottery" }
 };
 

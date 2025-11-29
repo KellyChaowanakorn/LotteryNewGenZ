@@ -41,7 +41,6 @@ const lotteryDrawTimes: Partial<Record<LotteryType, string>> = {
   HANOI: "ทุกวัน 18:30",
   MALAYSIA: "พ, ส, อา 19:00",
   SINGAPORE: "จ, พ 18:00",
-  YEEKEE: "ทุก 15 นาที",
   KENO: "ทุก 5 นาที"
 };
 
