@@ -45,7 +45,9 @@ import {
   UserX,
   UserCheck,
   LineChart,
-  PieChart
+  PieChart,
+  Trophy,
+  Play
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -72,6 +74,21 @@ interface AdminStats {
   affiliates: { total: number; totalCommission: number };
 }
 
+interface LotteryResult {
+  id: number;
+  lotteryType: string;
+  drawDate: string;
+  firstPrize: string | null;
+  threeDigitTop: string | null;
+  threeDigitBottom: string | null;
+  twoDigitTop: string | null;
+  twoDigitBottom: string | null;
+  runTop: string | null;
+  runBottom: string | null;
+  isProcessed: boolean;
+  createdAt: string;
+}
+
 export default function Admin() {
   const { language, t } = useI18n();
   const { isAdminAuthenticated } = useAdmin();
@@ -81,6 +98,14 @@ export default function Admin() {
   const [newNumber, setNewNumber] = useState("");
   const [newBetType, setNewBetType] = useState<BetType | "all">("all");
   const [betFilter, setBetFilter] = useState<"all" | "pending" | "won" | "lost">("all");
+
+  const [resultLotteryType, setResultLotteryType] = useState<LotteryType | "">("");
+  const [resultDrawDate, setResultDrawDate] = useState(new Date().toISOString().split('T')[0]);
+  const [resultFirstPrize, setResultFirstPrize] = useState("");
+  const [resultThreeTop, setResultThreeTop] = useState("");
+  const [resultThreeBottom, setResultThreeBottom] = useState("");
+  const [resultTwoTop, setResultTwoTop] = useState("");
+  const [resultTwoBottom, setResultTwoBottom] = useState("");
 
   const { data: blockedNumbers = [], isLoading } = useQuery<BlockedNumber[]>({
     queryKey: ["/api/blocked-numbers"],
@@ -101,6 +126,10 @@ export default function Admin() {
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
     refetchInterval: 30000,
+  });
+
+  const { data: lotteryResults = [], isLoading: isLoadingResults } = useQuery<LotteryResult[]>({
+    queryKey: ["/api/lottery-results"],
   });
 
   const addBlockedMutation = useMutation({
@@ -179,6 +208,62 @@ export default function Admin() {
     }
   });
 
+  const createResultMutation = useMutation({
+    mutationFn: async (data: {
+      lotteryType: string;
+      drawDate: string;
+      firstPrize?: string;
+      threeDigitTop?: string;
+      threeDigitBottom?: string;
+      twoDigitTop?: string;
+      twoDigitBottom?: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/lottery-results", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lottery-results"] });
+      setResultFirstPrize("");
+      setResultThreeTop("");
+      setResultThreeBottom("");
+      setResultTwoTop("");
+      setResultTwoBottom("");
+      toast({
+        title: language === "th" ? "บันทึกผลหวยสำเร็จ" : "Lottery result saved"
+      });
+    },
+    onError: () => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const processResultMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/lottery-results/${id}/process`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lottery-results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: language === "th" 
+          ? `ประมวลผลแล้ว: ถูก ${data.won} รายการ, ไม่ถูก ${data.lost} รายการ`
+          : `Processed: ${data.won} won, ${data.lost} lost`
+      });
+    },
+    onError: () => {
+      toast({
+        title: language === "th" ? "เกิดข้อผิดพลาด" : "Error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+
   if (!isAdminAuthenticated) {
     return (
       <div className="min-h-full flex items-center justify-center p-4">
@@ -238,6 +323,30 @@ export default function Admin() {
 
   const handleRejectTransaction = (tx: Transaction) => {
     updateTransactionMutation.mutate({ id: tx.id, status: "rejected" });
+  };
+
+  const handleCreateResult = () => {
+    if (!resultLotteryType || !resultDrawDate || !resultFirstPrize) {
+      toast({
+        title: language === "th" ? "กรุณากรอกข้อมูลให้ครบ" : "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    createResultMutation.mutate({
+      lotteryType: resultLotteryType,
+      drawDate: resultDrawDate,
+      firstPrize: resultFirstPrize,
+      threeDigitTop: resultThreeTop || undefined,
+      threeDigitBottom: resultThreeBottom || undefined,
+      twoDigitTop: resultTwoTop || resultFirstPrize.slice(-2),
+      twoDigitBottom: resultTwoBottom || undefined
+    });
+  };
+
+  const handleProcessResult = (id: number) => {
+    processResultMutation.mutate(id);
   };
 
   const pendingDeposits = allTransactions.filter(t => t.type === "deposit" && t.status === "pending");
@@ -413,15 +522,19 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm">
               <CreditCard className="h-4 w-4" />
-              <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Transactions"}</span>
+              <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>
               {pendingDeposits.length > 0 && (
                 <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
                   {pendingDeposits.length}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="results" className="gap-1 text-xs sm:text-sm">
+              <Trophy className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === "th" ? "ผลหวย" : "Results"}</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="gap-1 text-xs sm:text-sm">
               <Users className="h-4 w-4" />
@@ -429,15 +542,15 @@ export default function Admin() {
             </TabsTrigger>
             <TabsTrigger value="analytics" className="gap-1 text-xs sm:text-sm">
               <LineChart className="h-4 w-4" />
-              <span className="hidden sm:inline">{language === "th" ? "วิเคราะห์" : "Analytics"}</span>
+              <span className="hidden sm:inline">{language === "th" ? "วิเคราะห์" : "Charts"}</span>
             </TabsTrigger>
             <TabsTrigger value="bets" className="gap-1 text-xs sm:text-sm">
               <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">{language === "th" ? "รายงาน" : "Reports"}</span>
+              <span className="hidden sm:inline">{language === "th" ? "รายงาน" : "Bets"}</span>
             </TabsTrigger>
             <TabsTrigger value="blocked" className="gap-1 text-xs sm:text-sm">
               <Ban className="h-4 w-4" />
-              <span className="hidden sm:inline">{language === "th" ? "เลขอั้น" : "Blocked"}</span>
+              <span className="hidden sm:inline">{language === "th" ? "อั้น" : "Block"}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -509,6 +622,191 @@ export default function Admin() {
                                 {language === "th" ? "ปฏิเสธ" : "Reject"}
                               </Button>
                             </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="results" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  {language === "th" ? "บันทึกผลหวย" : "Add Lottery Result"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "ประเภทหวย" : "Lottery Type"}</Label>
+                    <Select value={resultLotteryType} onValueChange={(v) => setResultLotteryType(v as LotteryType)}>
+                      <SelectTrigger data-testid="select-result-lottery">
+                        <SelectValue placeholder={language === "th" ? "เลือกหวย" : "Select lottery"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lotteryTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {lotteryTypeNames[type][language]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "วันที่ออก" : "Draw Date"}</Label>
+                    <Input
+                      type="date"
+                      value={resultDrawDate}
+                      onChange={(e) => setResultDrawDate(e.target.value)}
+                      data-testid="input-result-date"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "รางวัลที่ 1 (6 หลัก)" : "First Prize (6 digits)"}</Label>
+                    <Input
+                      value={resultFirstPrize}
+                      onChange={(e) => setResultFirstPrize(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="123456"
+                      className="font-mono"
+                      maxLength={6}
+                      data-testid="input-first-prize"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "3 ตัวหน้า" : "3 Digits Front"}</Label>
+                    <Input
+                      value={resultThreeTop}
+                      onChange={(e) => setResultThreeTop(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="123"
+                      className="font-mono"
+                      maxLength={3}
+                      data-testid="input-three-front"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "3 ตัวล่าง" : "3 Digits Bottom"}</Label>
+                    <Input
+                      value={resultThreeBottom}
+                      onChange={(e) => setResultThreeBottom(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="456"
+                      className="font-mono"
+                      maxLength={3}
+                      data-testid="input-three-bottom"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "2 ตัวล่าง" : "2 Digits Bottom"}</Label>
+                    <Input
+                      value={resultTwoBottom}
+                      onChange={(e) => setResultTwoBottom(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="00"
+                      className="font-mono"
+                      maxLength={2}
+                      data-testid="input-two-bottom"
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleCreateResult} 
+                  className="w-full gap-2"
+                  disabled={createResultMutation.isPending}
+                  data-testid="button-save-result"
+                >
+                  {createResultMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {language === "th" ? "บันทึกผลหวย" : "Save Result"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Trophy className="h-5 w-5" />
+                  {language === "th" ? "รายการผลหวย" : "Lottery Results"}
+                  <Badge variant="secondary">{lotteryResults.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingResults ? (
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : lotteryResults.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{language === "th" ? "ยังไม่มีผลหวย" : "No lottery results yet"}</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{language === "th" ? "หวย" : "Lottery"}</TableHead>
+                        <TableHead>{language === "th" ? "วันที่" : "Date"}</TableHead>
+                        <TableHead>{language === "th" ? "รางวัลที่ 1" : "First Prize"}</TableHead>
+                        <TableHead>{language === "th" ? "2 ตัวล่าง" : "2D Bottom"}</TableHead>
+                        <TableHead>{language === "th" ? "สถานะ" : "Status"}</TableHead>
+                        <TableHead className="text-right">{language === "th" ? "จัดการ" : "Actions"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {lotteryResults.map((result) => (
+                        <TableRow key={result.id} data-testid={`row-result-${result.id}`}>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {lotteryTypeNames[result.lotteryType as LotteryType]?.[language] || result.lotteryType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono">
+                            {new Date(result.drawDate).toLocaleDateString(language === "th" ? "th-TH" : "en-US")}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-lg text-primary">
+                            {result.firstPrize || "-"}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold">
+                            {result.twoDigitBottom || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {result.isProcessed ? (
+                              <Badge className="bg-green-500 gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                {language === "th" ? "ประมวลผลแล้ว" : "Processed"}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="gap-1">
+                                <Clock className="h-3 w-3" />
+                                {language === "th" ? "รอประมวลผล" : "Pending"}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!result.isProcessed && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProcessResult(result.id)}
+                                disabled={processResultMutation.isPending}
+                                data-testid={`button-process-${result.id}`}
+                              >
+                                <Play className="h-4 w-4 mr-1" />
+                                {language === "th" ? "ประมวลผล" : "Process"}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

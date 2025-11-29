@@ -324,43 +324,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/lottery-results", async (req, res) => {
-    const mockResults = [
-      {
-        lotteryType: "THAI_GOV",
-        date: "2024-11-16",
-        results: {
-          firstPrize: "123456",
-          threeDigitTop: ["123", "456"],
-          threeDigitBottom: ["789", "012"],
-          twoDigit: "56",
-        },
-        isExternal: false,
-      },
-      {
-        lotteryType: "THAI_STOCK",
-        date: "2024-11-29",
-        results: {
-          firstPrize: "89",
-          threeDigitTop: ["889"],
-          twoDigit: "89",
-        },
-        isExternal: false,
-      },
-      {
-        lotteryType: "HANOI",
-        date: "2024-11-28",
-        results: {
-          firstPrize: "12345",
-          threeDigitTop: ["123", "345"],
-          twoDigit: "45",
-        },
-        isExternal: false,
-      },
-    ];
-
-    res.json(mockResults);
-  });
 
   app.get("/api/affiliates/:userId", async (req, res) => {
     try {
@@ -461,6 +424,179 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/lottery-results", async (req, res) => {
+    try {
+      const results = await storage.getAllLotteryResults();
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch lottery results" });
+    }
+  });
+
+  app.post("/api/lottery-results", async (req, res) => {
+    try {
+      const { lotteryType, drawDate, firstPrize, threeDigitTop, threeDigitBottom, 
+              twoDigitTop, twoDigitBottom, runTop, runBottom } = req.body;
+      
+      if (!lotteryType || !drawDate) {
+        return res.status(400).json({ error: "Missing required fields (lotteryType, drawDate)" });
+      }
+
+      const existing = await storage.getLotteryResult(lotteryType, drawDate);
+      if (existing) {
+        return res.status(400).json({ error: "Result already exists for this lottery and date" });
+      }
+
+      const result = await storage.createLotteryResult({
+        lotteryType,
+        drawDate,
+        firstPrize: firstPrize || null,
+        threeDigitTop: threeDigitTop || null,
+        threeDigitBottom: threeDigitBottom || null,
+        twoDigitTop: twoDigitTop || null,
+        twoDigitBottom: twoDigitBottom || null,
+        runTop: runTop || null,
+        runBottom: runBottom || null,
+        isProcessed: false,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error creating lottery result:", error);
+      res.status(500).json({ error: "Failed to create lottery result" });
+    }
+  });
+
+  function checkBetWin(bet: { betType: string; numbers: string }, result: {
+    firstPrize?: string | null;
+    threeDigitTop?: string | null;
+    threeDigitBottom?: string | null;
+    twoDigitTop?: string | null;
+    twoDigitBottom?: string | null;
+    runTop?: string | null;
+    runBottom?: string | null;
+  }): boolean {
+    const betNumber = bet.numbers;
+    
+    switch (bet.betType) {
+      case "THREE_TOP":
+        return betNumber === result.firstPrize?.slice(-3);
+      
+      case "THREE_TOOD": {
+        const lastThree = result.firstPrize?.slice(-3);
+        if (!lastThree) return false;
+        const sortedBet = betNumber.split("").sort().join("");
+        const sortedResult = lastThree.split("").sort().join("");
+        return sortedBet === sortedResult;
+      }
+      
+      case "THREE_FRONT":
+        return betNumber === result.threeDigitTop;
+      
+      case "THREE_BOTTOM":
+        return betNumber === result.threeDigitBottom;
+      
+      case "THREE_REVERSE": {
+        const lastThree = result.firstPrize?.slice(-3);
+        if (!lastThree) return false;
+        const permutations = getPermutations(lastThree);
+        return permutations.includes(betNumber);
+      }
+      
+      case "TWO_TOP":
+        return betNumber === result.twoDigitTop || betNumber === result.firstPrize?.slice(-2);
+      
+      case "TWO_BOTTOM":
+        return betNumber === result.twoDigitBottom;
+      
+      case "RUN_TOP": {
+        if (result.runTop && betNumber === result.runTop) return true;
+        const lastTwo = result.twoDigitTop || result.firstPrize?.slice(-2);
+        return lastTwo ? lastTwo.includes(betNumber) : false;
+      }
+      
+      case "RUN_BOTTOM": {
+        if (result.runBottom && betNumber === result.runBottom) return true;
+        const bottomTwo = result.twoDigitBottom;
+        return bottomTwo ? bottomTwo.includes(betNumber) : false;
+      }
+      
+      default:
+        return false;
+    }
+  }
+
+  function getPermutations(str: string): string[] {
+    if (str.length <= 1) return [str];
+    const result: string[] = [];
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const remaining = str.slice(0, i) + str.slice(i + 1);
+      const perms = getPermutations(remaining);
+      for (const perm of perms) {
+        result.push(char + perm);
+      }
+    }
+    return [...new Set(result)];
+  }
+
+  app.post("/api/lottery-results/:id/process", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+
+      const allResults = await storage.getAllLotteryResults();
+      const lotteryResult = allResults.find(r => r.id === id);
+      
+      if (!lotteryResult) {
+        return res.status(404).json({ error: "Lottery result not found" });
+      }
+
+      if (lotteryResult.isProcessed) {
+        return res.status(400).json({ error: "Result already processed" });
+      }
+
+      const pendingBets = await storage.getBetsByLotteryAndDate(
+        lotteryResult.lotteryType, 
+        lotteryResult.drawDate
+      );
+
+      let wonCount = 0;
+      let lostCount = 0;
+      let totalWinnings = 0;
+
+      for (const bet of pendingBets) {
+        const isWinner = checkBetWin(bet, lotteryResult);
+        
+        if (isWinner) {
+          await storage.updateBetStatus(bet.id, "won");
+          const winAmount = bet.potentialWin;
+          await storage.updateUserBalance(bet.userId, winAmount);
+          totalWinnings += winAmount;
+          wonCount++;
+        } else {
+          await storage.updateBetStatus(bet.id, "lost");
+          lostCount++;
+        }
+      }
+
+      await storage.updateLotteryResultProcessed(id);
+
+      res.json({
+        success: true,
+        processed: pendingBets.length,
+        won: wonCount,
+        lost: lostCount,
+        totalWinnings
+      });
+    } catch (error) {
+      console.error("Error processing lottery result:", error);
+      res.status(500).json({ error: "Failed to process lottery result" });
     }
   });
 

@@ -6,6 +6,7 @@ import {
   blockedNumbers,
   transactions,
   affiliates,
+  lotteryResults,
   type User,
   type InsertUser,
   type Bet,
@@ -14,7 +15,9 @@ import {
   type InsertBlockedNumber,
   type Transaction,
   type InsertTransaction,
-  type Affiliate
+  type Affiliate,
+  type InsertLotteryResult,
+  type StoredLotteryResult
 } from "@shared/schema";
 
 export interface IStorage {
@@ -46,6 +49,12 @@ export interface IStorage {
   getAllAffiliates(): Promise<Affiliate[]>;
   createAffiliate(referrerId: number, referredId: number): Promise<Affiliate>;
   updateAffiliateStats(referredId: number, betAmount: number): Promise<void>;
+
+  getLotteryResult(lotteryType: string, drawDate: string): Promise<StoredLotteryResult | undefined>;
+  getAllLotteryResults(): Promise<StoredLotteryResult[]>;
+  createLotteryResult(result: InsertLotteryResult): Promise<StoredLotteryResult>;
+  updateLotteryResultProcessed(id: number): Promise<StoredLotteryResult | undefined>;
+  getBetsByLotteryAndDate(lotteryType: string, drawDate: string): Promise<Bet[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -199,6 +208,39 @@ export class DatabaseStorage implements IStorage {
         commission: sql`${affiliates.commission} + ${commission}`
       })
       .where(eq(affiliates.referredId, referredId));
+  }
+
+  async getLotteryResult(lotteryType: string, drawDate: string): Promise<StoredLotteryResult | undefined> {
+    const [result] = await db
+      .select()
+      .from(lotteryResults)
+      .where(and(eq(lotteryResults.lotteryType, lotteryType), eq(lotteryResults.drawDate, drawDate)));
+    return result || undefined;
+  }
+
+  async getAllLotteryResults(): Promise<StoredLotteryResult[]> {
+    return db.select().from(lotteryResults);
+  }
+
+  async createLotteryResult(result: InsertLotteryResult): Promise<StoredLotteryResult> {
+    const [lotteryResult] = await db.insert(lotteryResults).values(result).returning();
+    return lotteryResult;
+  }
+
+  async updateLotteryResultProcessed(id: number): Promise<StoredLotteryResult | undefined> {
+    const [result] = await db
+      .update(lotteryResults)
+      .set({ isProcessed: true })
+      .where(eq(lotteryResults.id, id))
+      .returning();
+    return result || undefined;
+  }
+
+  async getBetsByLotteryAndDate(lotteryType: string, drawDate: string): Promise<Bet[]> {
+    return db
+      .select()
+      .from(bets)
+      .where(and(eq(bets.lotteryType, lotteryType), eq(bets.drawDate, drawDate), eq(bets.status, "pending")));
   }
 }
 

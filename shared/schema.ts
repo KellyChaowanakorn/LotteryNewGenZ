@@ -161,6 +161,29 @@ export const affiliates = pgTable("affiliates", {
 
 export type Affiliate = typeof affiliates.$inferSelect;
 
+export const lotteryResults = pgTable("lottery_results", {
+  id: serial("id").primaryKey(),
+  lotteryType: text("lottery_type").notNull(),
+  drawDate: text("draw_date").notNull(),
+  firstPrize: text("first_prize"),
+  threeDigitTop: text("three_digit_top"),
+  threeDigitBottom: text("three_digit_bottom"),
+  twoDigitTop: text("two_digit_top"),
+  twoDigitBottom: text("two_digit_bottom"),
+  runTop: text("run_top"),
+  runBottom: text("run_bottom"),
+  isProcessed: boolean("is_processed").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow()
+});
+
+export const insertLotteryResultSchema = createInsertSchema(lotteryResults).omit({
+  id: true,
+  createdAt: true
+});
+
+export type InsertLotteryResult = z.infer<typeof insertLotteryResultSchema>;
+export type StoredLotteryResult = typeof lotteryResults.$inferSelect;
+
 export const usersRelations = relations(users, ({ many }) => ({
   bets: many(bets),
   transactions: many(transactions)
