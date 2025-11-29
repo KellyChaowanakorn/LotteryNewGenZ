@@ -7,6 +7,7 @@ import {
   transactions,
   affiliates,
   lotteryResults,
+  payoutSettings,
   type User,
   type InsertUser,
   type Bet,
@@ -17,7 +18,9 @@ import {
   type InsertTransaction,
   type Affiliate,
   type InsertLotteryResult,
-  type StoredLotteryResult
+  type StoredLotteryResult,
+  type PayoutSetting,
+  type InsertPayoutSetting
 } from "@shared/schema";
 
 export interface IStorage {
@@ -55,6 +58,11 @@ export interface IStorage {
   createLotteryResult(result: InsertLotteryResult): Promise<StoredLotteryResult>;
   updateLotteryResultProcessed(id: number): Promise<StoredLotteryResult | undefined>;
   getBetsByLotteryAndDate(lotteryType: string, drawDate: string): Promise<Bet[]>;
+
+  getPayoutSettings(): Promise<PayoutSetting[]>;
+  getPayoutRate(betType: string): Promise<number>;
+  updatePayoutRate(betType: string, rate: number): Promise<PayoutSetting>;
+  initializePayoutRates(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -241,6 +249,67 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(bets)
       .where(and(eq(bets.lotteryType, lotteryType), eq(bets.drawDate, drawDate), eq(bets.status, "pending")));
+  }
+
+  async getPayoutSettings(): Promise<PayoutSetting[]> {
+    return db.select().from(payoutSettings);
+  }
+
+  async getPayoutRate(betType: string): Promise<number> {
+    const [setting] = await db.select().from(payoutSettings).where(eq(payoutSettings.betType, betType));
+    if (setting) {
+      return setting.rate;
+    }
+    const defaultRates: Record<string, number> = {
+      THREE_TOP: 900,
+      THREE_TOOD: 150,
+      THREE_FRONT: 450,
+      THREE_BOTTOM: 450,
+      THREE_REVERSE: 4500,
+      TWO_TOP: 90,
+      TWO_BOTTOM: 90,
+      RUN_TOP: 3.2,
+      RUN_BOTTOM: 4.2
+    };
+    return defaultRates[betType] || 1;
+  }
+
+  async updatePayoutRate(betType: string, rate: number): Promise<PayoutSetting> {
+    const existing = await db.select().from(payoutSettings).where(eq(payoutSettings.betType, betType));
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(payoutSettings)
+        .set({ rate, updatedAt: new Date() })
+        .where(eq(payoutSettings.betType, betType))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(payoutSettings)
+      .values({ betType, rate })
+      .returning();
+    return created;
+  }
+
+  async initializePayoutRates(): Promise<void> {
+    const defaultRates: Record<string, number> = {
+      THREE_TOP: 900,
+      THREE_TOOD: 150,
+      THREE_FRONT: 450,
+      THREE_BOTTOM: 450,
+      THREE_REVERSE: 4500,
+      TWO_TOP: 90,
+      TWO_BOTTOM: 90,
+      RUN_TOP: 3.2,
+      RUN_BOTTOM: 4.2
+    };
+
+    for (const [betType, rate] of Object.entries(defaultRates)) {
+      const existing = await db.select().from(payoutSettings).where(eq(payoutSettings.betType, betType));
+      if (existing.length === 0) {
+        await db.insert(payoutSettings).values({ betType, rate });
+      }
+    }
   }
 }
 
