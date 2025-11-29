@@ -269,3 +269,41 @@ export const insertPayoutSettingSchema = createInsertSchema(payoutSettings).omit
 
 export type InsertPayoutSetting = z.infer<typeof insertPayoutSettingSchema>;
 export type PayoutSetting = typeof payoutSettings.$inferSelect;
+
+export const betLimits = pgTable("bet_limits", {
+  id: serial("id").primaryKey(),
+  number: text("number").notNull(),
+  maxAmount: real("max_amount").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow()
+});
+
+export const betLimitLotteryTypes = pgTable("bet_limit_lottery_types", {
+  id: serial("id").primaryKey(),
+  betLimitId: integer("bet_limit_id").notNull().references(() => betLimits.id, { onDelete: "cascade" }),
+  lotteryType: text("lottery_type").notNull()
+});
+
+export const betLimitsRelations = relations(betLimits, ({ many }) => ({
+  lotteryTypes: many(betLimitLotteryTypes)
+}));
+
+export const betLimitLotteryTypesRelations = relations(betLimitLotteryTypes, ({ one }) => ({
+  betLimit: one(betLimits, {
+    fields: [betLimitLotteryTypes.betLimitId],
+    references: [betLimits.id]
+  })
+}));
+
+export const insertBetLimitSchema = createInsertSchema(betLimits).omit({
+  id: true,
+  createdAt: true
+});
+
+export type InsertBetLimit = z.infer<typeof insertBetLimitSchema>;
+export type BetLimit = typeof betLimits.$inferSelect;
+export type BetLimitLotteryType = typeof betLimitLotteryTypes.$inferSelect;
+
+export type BetLimitWithLotteryTypes = BetLimit & {
+  lotteryTypes: string[];
+};
