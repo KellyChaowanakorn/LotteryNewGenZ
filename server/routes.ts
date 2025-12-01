@@ -510,7 +510,45 @@ export async function registerRoutes(
       }
 
       if (status === "approved" && existingTx.type === "deposit") {
+        // เพิ่มเงินฝากให้ผู้ใช้
         await storage.updateUserBalance(existingTx.userId, existingTx.amount);
+        
+        // โบนัส 10% เมื่อฝากเกิน 100 บาท
+        if (existingTx.amount > 100) {
+          const bonusAmount = Math.floor(existingTx.amount * 0.10);
+          await storage.updateUserBalance(existingTx.userId, bonusAmount);
+          
+          // สร้างรายการธุรกรรมโบนัส (auto approved)
+          await storage.createTransaction({
+            userId: existingTx.userId,
+            type: "bonus",
+            amount: bonusAmount,
+            status: "approved",
+            slipImage: null,
+            reference: `10% deposit bonus from transaction #${id}`
+          });
+          
+          console.log(`Added 10% bonus (${bonusAmount} baht) to user ${existingTx.userId}`);
+        }
+        
+        // Affiliate ได้ 5% จากยอดฝากของผู้สมัครใหม่
+        const affiliateResult = await storage.updateAffiliateDepositStats(existingTx.userId, existingTx.amount);
+        if (affiliateResult) {
+          // เพิ่มเงินค่าคอมมิชชั่นให้ผู้แนะนำ
+          await storage.updateUserBalance(affiliateResult.referrerId, affiliateResult.commission);
+          
+          // สร้างรายการธุรกรรมค่าคอมมิชชั่น
+          await storage.createTransaction({
+            userId: affiliateResult.referrerId,
+            type: "affiliate",
+            amount: affiliateResult.commission,
+            status: "approved",
+            slipImage: null,
+            reference: `5% affiliate commission from user #${existingTx.userId} deposit`
+          });
+          
+          console.log(`Added 5% affiliate commission (${affiliateResult.commission} baht) to referrer ${affiliateResult.referrerId}`);
+        }
       }
 
       if (status === "approved" || status === "rejected") {

@@ -262,20 +262,34 @@ export class DatabaseStorage implements IStorage {
   async createAffiliate(referrerId: number, referredId: number): Promise<Affiliate> {
     const [affiliate] = await db
       .insert(affiliates)
-      .values({ referrerId, referredId, totalBetAmount: 0, commission: 0 })
+      .values({ referrerId, referredId, totalBetAmount: 0, totalDepositAmount: 0, commission: 0 })
       .returning();
     return affiliate;
   }
 
   async updateAffiliateStats(referredId: number, betAmount: number): Promise<void> {
-    const commission = betAmount * 0.20;
     await db
       .update(affiliates)
       .set({
-        totalBetAmount: sql`${affiliates.totalBetAmount} + ${betAmount}`,
+        totalBetAmount: sql`${affiliates.totalBetAmount} + ${betAmount}`
+      })
+      .where(eq(affiliates.referredId, referredId));
+  }
+  
+  async updateAffiliateDepositStats(referredId: number, depositAmount: number): Promise<{referrerId: number; commission: number} | null> {
+    const affiliate = await db.select().from(affiliates).where(eq(affiliates.referredId, referredId)).limit(1);
+    if (affiliate.length === 0) return null;
+    
+    const commission = Math.floor(depositAmount * 0.05);
+    await db
+      .update(affiliates)
+      .set({
+        totalDepositAmount: sql`${affiliates.totalDepositAmount} + ${depositAmount}`,
         commission: sql`${affiliates.commission} + ${commission}`
       })
       .where(eq(affiliates.referredId, referredId));
+    
+    return { referrerId: affiliate[0].referrerId, commission };
   }
 
   async getLotteryResult(lotteryType: string, drawDate: string): Promise<StoredLotteryResult | undefined> {

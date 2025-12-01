@@ -155,6 +155,7 @@ export const affiliates = pgTable("affiliates", {
   referrerId: integer("referrer_id").notNull().references(() => users.id),
   referredId: integer("referred_id").notNull().references(() => users.id),
   totalBetAmount: real("total_bet_amount").notNull().default(0),
+  totalDepositAmount: real("total_deposit_amount").notNull().default(0),
   commission: real("commission").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow()
 });
