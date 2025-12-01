@@ -27,6 +27,7 @@ import {
   LogOut,
   Wallet,
   Calculator,
+  Shuffle,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -39,6 +40,7 @@ export function AppSidebar() {
     { title: t("nav.home"), url: "/", icon: Home },
     { title: t("nav.results"), url: "/results", icon: Trophy },
     { title: language === "th" ? "คำนวณหวยชุด" : "Set Calculator", url: "/calculator", icon: Calculator },
+    { title: language === "th" ? "หวยกลับ (Permutation)" : "Permutation", url: "/permutation", icon: Shuffle },
     { title: t("nav.affiliate"), url: "/affiliate", icon: Users },
   ];
 

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useI18n } from "@/lib/i18n";
 import { useCart, useUser } from "@/lib/store";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { 
   Calculator, 
   Hash, 
@@ -19,7 +20,9 @@ import {
   ShoppingCart,
   CheckCircle,
   X,
-  AlertCircle
+  AlertCircle,
+  Gift,
+  Shuffle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -28,12 +31,47 @@ import {
   lotteryTypeNames, 
   betTypeNames,
   type LotteryType,
-  type BetType 
+  type BetType,
+  type PayoutSetting
 } from "@shared/schema";
 
 interface NumberSet {
   id: string;
   numbers: string[];
+}
+
+function getPermutations(str: string): string[] {
+  if (str.length <= 1) return [str];
+  const result: string[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const remaining = str.slice(0, i) + str.slice(i + 1);
+    for (const perm of getPermutations(remaining)) {
+      result.push(char + perm);
+    }
+  }
+  return [...new Set(result)];
+}
+
+function getReversePermutations(str: string): string[] {
+  if (str.length !== 2) return [str];
+  const reversed = str[1] + str[0];
+  return str === reversed ? [str] : [str, reversed];
+}
+
+function getDefaultPayoutRate(betType: BetType): number {
+  const defaults: Record<BetType, number> = {
+    TWO_TOP: 60,
+    TWO_BOTTOM: 60,
+    THREE_TOP: 500,
+    THREE_TOD: 90,
+    FOUR_TOP: 900,
+    FIVE_TOP: 2000,
+    RUN_TOP: 3,
+    RUN_BOTTOM: 4,
+    REVERSE: 94
+  };
+  return defaults[betType] || 1;
 }
 
 function getRequiredDigits(betType: BetType): number {
@@ -84,6 +122,15 @@ export default function SetCalculator() {
   const [pricePerSet, setPricePerSet] = useState("1");
   const [lotteryType, setLotteryType] = useState<LotteryType>("THAI_GOV");
   const [betType, setBetType] = useState<BetType>("TWO_TOP");
+
+  const { data: payoutSettings } = useQuery<PayoutSetting[]>({
+    queryKey: ["/api/payout-settings"]
+  });
+
+  const payoutRate = useMemo(() => {
+    const setting = payoutSettings?.find(s => s.betType === betType);
+    return setting?.rate || getDefaultPayoutRate(betType);
+  }, [payoutSettings, betType]);
 
   const requiredDigits = getRequiredDigits(betType);
 
@@ -181,14 +228,36 @@ export default function SetCalculator() {
     const totalNumbers = allNumbers.length;
     const totalAmount = sets.length * price;
 
+    let winningNumbers: string[] = [];
+    if (betType === "THREE_TOD") {
+      uniqueNumbers.forEach(num => {
+        const perms = getPermutations(num);
+        winningNumbers.push(...perms);
+      });
+      winningNumbers = [...new Set(winningNumbers)].sort();
+    } else if (betType === "REVERSE") {
+      uniqueNumbers.forEach(num => {
+        const perms = getReversePermutations(num);
+        winningNumbers.push(...perms);
+      });
+      winningNumbers = [...new Set(winningNumbers)].sort();
+    } else {
+      winningNumbers = uniqueNumbers;
+    }
+
+    const potentialWin = totalAmount * payoutRate;
+
     return {
       totalSets: sets.length,
       totalNumbers,
       uniqueCount: uniqueNumbers.length,
       uniqueNumbers,
-      totalAmount
+      totalAmount,
+      winningNumbers,
+      potentialWin,
+      payoutRate
     };
-  }, [sets, pricePerSet]);
+  }, [sets, pricePerSet, betType, payoutRate]);
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
@@ -505,6 +574,25 @@ export default function SetCalculator() {
                   </CardContent>
                 </Card>
 
+                {result.totalAmount > 0 && (
+                  <Card className="bg-yellow-500/10 border-yellow-500/30">
+                    <CardContent className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <Gift className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                        <p className="text-sm text-muted-foreground">
+                          {language === "th" ? "ถ้าถูก จะได้" : "Potential Win"}
+                        </p>
+                      </div>
+                      <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-potential-win">
+                        {result.potentialWin.toLocaleString()} ฿
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {language === "th" ? `อัตราจ่าย x${result.payoutRate}` : `Payout rate x${result.payoutRate}`}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Button 
                   className="w-full h-12 text-lg"
                   onClick={handleAddToCart}
@@ -521,7 +609,7 @@ export default function SetCalculator() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center justify-between">
-                    <span>{language === "th" ? "เลขทั้งหมด (ไม่ซ้ำ)" : "All Numbers (Unique)"}</span>
+                    <span>{language === "th" ? "เลขที่ซื้อ (ไม่ซ้ำ)" : "Numbers Purchased (Unique)"}</span>
                     <Badge variant="outline">{result.uniqueCount}</Badge>
                   </CardTitle>
                 </CardHeader>
@@ -538,6 +626,49 @@ export default function SetCalculator() {
                       </Badge>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {(betType === "THREE_TOD" || betType === "REVERSE") && result.winningNumbers.length > 0 && (
+              <Card className="bg-blue-500/5 border-blue-500/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Shuffle className="h-4 w-4 text-blue-500" />
+                      <span className="text-blue-600 dark:text-blue-400">
+                        {language === "th" 
+                          ? (betType === "THREE_TOD" ? "เลขโต๊ดที่จะถูก" : "เลขกลับที่จะถูก")
+                          : (betType === "THREE_TOD" ? "TOD Winning Numbers" : "Reverse Winning Numbers")}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                      {result.winningNumbers.length} {language === "th" ? "เลข" : "nos"}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto">
+                    {result.winningNumbers.map((num, idx) => (
+                      <Badge 
+                        key={idx} 
+                        variant="secondary"
+                        className="font-mono text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                        data-testid={`badge-winning-${idx}`}
+                      >
+                        {num}
+                      </Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {language === "th" 
+                      ? (betType === "THREE_TOD" 
+                          ? "หมายเหตุ: ตั๋วโต๊ดจะถูกถ้าเลข 3 ตัวท้ายของรางวัลที่ 1 ตรงกับหนึ่งในเลขเหล่านี้" 
+                          : "หมายเหตุ: ตั๋วกลับจะถูกทั้ง 2 แบบ (12 ถูกทั้ง 12 และ 21)")
+                      : (betType === "THREE_TOD" 
+                          ? "Note: TOD ticket wins if last 3 digits of 1st prize match any of these numbers"
+                          : "Note: Reverse ticket wins both ways (12 wins on both 12 and 21)")}
+                  </p>
                 </CardContent>
               </Card>
             )}

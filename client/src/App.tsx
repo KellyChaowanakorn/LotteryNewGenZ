@@ -17,6 +17,7 @@ import Affiliate from "@/pages/Affiliate";
 import Profile from "@/pages/Profile";
 import Wallet from "@/pages/Wallet";
 import SetCalculator from "@/pages/SetCalculator";
+import PermutationCalculator from "@/pages/PermutationCalculator";
 import Admin from "@/pages/Admin";
 import AdminLogin from "@/pages/AdminLogin";
 import Login from "@/pages/Login";
@@ -77,6 +78,7 @@ function Router() {
       <Route path="/profile" component={() => <AppLayout><Profile /></AppLayout>} />
       <Route path="/wallet" component={() => <AppLayout><Wallet /></AppLayout>} />
       <Route path="/calculator" component={() => <AppLayout><SetCalculator /></AppLayout>} />
+      <Route path="/permutation" component={() => <AppLayout><PermutationCalculator /></AppLayout>} />
       <Route path="/admin" component={() => <AppLayout><Admin /></AppLayout>} />
       <Route path="/admin/login" component={() => <AuthLayout><AdminLogin /></AuthLayout>} />
       <Route path="/login" component={() => <AuthLayout><Login /></AuthLayout>} />

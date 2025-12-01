@@ -132,7 +132,7 @@ Preferred communication style: Simple, everyday language.
 - Tables created: users, bets, blocked_numbers, transactions, affiliates
 - User IDs are now integers (serial primary key) instead of strings
 - Added proper foreign key relationships between tables
-- Affiliate system properly tracks referrals and calculates 20% commission on bets
+- Affiliate system properly tracks referrals and calculates 5% commission on deposits
 
 ### Password Security Update (Nov 29, 2025)
 - Implemented secure password hashing using Node.js crypto module (scrypt algorithm)
@@ -221,3 +221,28 @@ Preferred communication style: Simple, everyday language.
 - Updated BetTypeSelector UI with categorized bet types (2-digit, 3-digit, 4-5 digit, floating, special)
 - Updated SetCalculator with digit validation for 1-5 digit bet types
 - Removed old bet types: THREE_TOOD, THREE_FRONT, THREE_BOTTOM, THREE_REVERSE
+
+### Affiliate Commission Model Change (Dec 1, 2025)
+- Changed from 20% commission on bets to 5% commission on deposits
+- New column `totalDepositAmount` in affiliates table to track referred users' deposits
+- Commission automatically credited to referrer when referred user's deposit is approved
+- Transaction logged as type "affiliate" with reference to original deposit
+
+### Deposit Bonus System (Dec 1, 2025)
+- 10% bonus for deposits over 100 baht
+- Bonus automatically added when admin approves deposit
+- Logged as separate "bonus" transaction with reference to original deposit
+
+### SetCalculator Enhancements (Dec 1, 2025)
+- **Permutation Display**: Shows all winning numbers for THREE_TOD bets (e.g., 123 → 123, 132, 213, 231, 312, 321)
+- **Reverse Display**: Shows both orders for REVERSE bets (e.g., 12 → 12, 21)
+- **Potential Winnings**: Displays expected payout based on current payout rates
+- Fetches live payout rates from `/api/payout-settings`
+
+### New Permutation Calculator Page (Dec 1, 2025)
+- Route: `/permutation` - Accessible from sidebar navigation
+- Automatic factorial permutation generation with duplicate removal
+- Supports 2, 3, 4, and 5 digit bet types
+- Shows expected vs actual permutation count when input has repeating digits
+- Example: "123" generates 6 permutations, "112" generates only 3 due to duplicate "1"
+- Displays total amount and potential winnings per number
