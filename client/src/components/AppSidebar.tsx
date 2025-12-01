@@ -28,6 +28,7 @@ import {
   Wallet,
   Calculator,
   Shuffle,
+  CheckCircle,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -48,6 +49,7 @@ export function AppSidebar() {
     ? [
         { title: t("nav.profile"), url: "/profile", icon: User },
         { title: language === "th" ? "ฝาก/ถอน" : "Deposit/Withdraw", url: "/wallet", icon: Wallet },
+        { title: language === "th" ? "ตรวจรางวัล" : "Check Results", url: "/self-check", icon: CheckCircle },
       ]
     : [];
 

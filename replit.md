@@ -1,248 +1,46 @@
 # QNQ Lottery System
 
 ## Overview
-
-QNQ Lottery is a comprehensive online lottery betting platform that supports multiple lottery types including Thai Government lottery, stock-based lotteries (Thai, Nikkei, Dow Jones, FTSE, DAX), international lotteries (Laos, Hanoi, Malaysia, Singapore), and quick-draw games (Yeekee, Keno). The system provides a complete betting workflow with cart management, payment processing, affiliate program, user wallet management, and administrative controls including blocked number management.
+QNQ Lottery is an online betting platform supporting diverse lottery types including Thai Government, stock-based (Thai, Nikkei, Dow Jones, FTSE, DAX), international (Laos, Hanoi, Malaysia, Singapore), and quick-draw games (Yeekee, Keno). It offers a complete betting experience with cart management, payment processing, an affiliate program, user wallet, and administrative controls like blocked number management. The system aims for a premium user experience with robust backend functionality.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
 ### Frontend Architecture
-
-**Framework & Build System**
-- React 18 with TypeScript using Vite as the build tool
-- Single Page Application (SPA) with client-side routing via Wouter
-- Component library built on Radix UI primitives with shadcn/ui design system
-- Styling via Tailwind CSS with custom design tokens for theming (light/dark mode support)
-
-**State Management**
-- Zustand for global state management with persistence middleware
-- TanStack Query (React Query) for server state management and caching
-- Separate stores for: cart items, user authentication, admin authentication, blocked numbers, and i18n (internationalization)
-
-**Key Design Decisions**
-- Mobile-first responsive design following design guidelines inspired by premium financial platforms
-- Thai-English bilingual support with persistent language preferences
-- Real-time cart management with local persistence
-- Premium credibility through refined details rather than decoration
+The frontend is a React 18 SPA with TypeScript, built using Vite. It leverages Radix UI and shadcn/ui for components, styled with Tailwind CSS, supporting custom theming and light/dark modes. State management uses Zustand for global state and TanStack Query for server state. The design is mobile-first, responsive, and supports Thai-English bilingualism.
 
 ### Backend Architecture
-
-**Server Framework**
-- Express.js HTTP server with custom middleware
-- HTTP server wrapped for potential WebSocket upgrades
-- RESTful API design pattern
-
-**Database & ORM**
-- PostgreSQL database (configured for Neon serverless)
-- Drizzle ORM for type-safe database queries
-- Schema-first approach with shared TypeScript types between client and server
-- Database migrations managed via Drizzle Kit
-
-**Key Features**
-- Blocked numbers management by lottery type and bet type
-- Payout rate calculation system with configurable rates
-- Session-based authentication (prepared for express-session integration)
-- Transaction management for deposits, withdrawals, bets, winnings, and affiliate commissions
-
-**API Structure**
-- `/api/blocked-numbers` - CRUD operations for managing blocked lottery numbers
-- User, bet, transaction, and affiliate management endpoints (referenced in client code)
-- Rate limiting and security middleware ready for production
+The backend is an Express.js server with a RESTful API design. It uses PostgreSQL (Neon serverless) with Drizzle ORM for type-safe queries. Key features include blocked number management, configurable payout rates, session-based authentication, and robust transaction management. API endpoints manage blocked numbers, users, bets, transactions, and affiliates, with security middleware in place.
 
 ### Data Models
-
-**Core Entities**
-1. **User** - Authentication, balance, referral codes, affiliate earnings
-2. **Bet** - Lottery type, bet type, numbers, amounts, status tracking
-3. **BlockedNumber** - System-wide number restrictions by lottery and bet type
-4. **Transaction** - Financial movements (deposits, withdrawals, winnings, affiliate commissions)
-5. **Affiliate** - Referral tracking between users
-
-**Lottery Types** - 12 supported types with localized names and draw schedules
-**Bet Types** - 9 bet variations with different payout multipliers (3.2x to 4500x)
+Core entities include `User`, `Bet`, `BlockedNumber`, `Transaction`, and `Affiliate`. The system supports 12 lottery types and 9 bet variations with defined payout multipliers.
 
 ### Authentication & Authorization
+The system supports both user and admin authentication with protected routes. Security considerations include credential-based API requests, CORS configuration, rate limiting, and input validation via Zod schemas.
 
-**User Authentication**
-- Client-side mock authentication for development
-- Prepared for server-side session management with connect-pg-simple
-- Separate admin authentication system
-- Protected routes and conditional UI rendering
-
-**Security Considerations**
-- Credential-based API requests
-- CORS configuration prepared
-- Rate limiting infrastructure ready
-- Input validation via Zod schemas
+### Key Features
+- **Smart Checkout Flow**: Automatically handles sufficient/insufficient balance scenarios, integrating with deposit modals. Bet placement is an atomic transaction.
+- **Winner Verification System**: Automates winner processing upon lottery result input, credits user balances, and provides admin and user interfaces for winner review and self-checking.
+- **Betting Limits System**: Allows administrators to configure maximum bet amounts per number, enforceable by lottery type.
+- **Bet Type Enable/Disable**: Administrators can globally toggle the availability of each of the 9 bet types.
+- **Affiliate Program**: Commissions are based on a percentage of referred users' deposits.
+- **Deposit Bonus System**: Automatically applies a bonus for deposits exceeding a certain threshold.
+- **Permutation Calculator**: A dedicated page for generating permutations for multi-digit bets, including duplicate handling and potential winnings display.
 
 ## External Dependencies
 
 ### Third-Party Services
-
-**Payment Integration**
-- PromptPay QR code generation for deposits
-- Manual payment verification via slip upload
-- Bank transfer support (KBank configured as example)
-- Prepared for Stripe integration (dependency installed)
-
-**Lottery Results**
-- External API integration planned for live lottery results
-- Mock data structure for 12 lottery types
-- Real-time update capability via polling/WebSocket
+- **Payment Integration**: PromptPay QR code generation, manual slip upload verification, bank transfer support (e.g., KBank). Prepared for Stripe integration.
+- **Lottery Results**: Planned integration with external APIs for live lottery results.
+- **Messaging**: Telegram Bot API for real-time notifications on financial transactions and winner processing.
 
 ### Key NPM Packages
-
-**UI & Styling**
-- `@radix-ui/*` - Headless UI component primitives
-- `tailwindcss` - Utility-first CSS framework
-- `class-variance-authority` - Component variant management
-- `lucide-react` - Icon library
-
-**Data & Forms**
-- `@tanstack/react-query` - Server state management
-- `react-hook-form` - Form handling
-- `@hookform/resolvers` - Form validation
-- `zod` - Schema validation
-
-**Database**
-- `@neondatabase/serverless` - Neon PostgreSQL driver
-- `drizzle-orm` - TypeScript ORM
-- `drizzle-zod` - Schema to Zod converter
-
-**Utilities**
-- `date-fns` - Date manipulation
-- `qrcode.react` - QR code generation
-- `nanoid` - Unique ID generation
-- `zustand` - State management
+- **UI & Styling**: `@radix-ui/`, `tailwindcss`, `class-variance-authority`, `lucide-react`.
+- **Data & Forms**: `@tanstack/react-query`, `react-hook-form`, `@hookform/resolvers`, `zod`.
+- **Database**: `@neondatabase/serverless`, `drizzle-orm`, `drizzle-zod`.
+- **Utilities**: `date-fns`, `qrcode.react`, `nanoid`, `zustand`.
 
 ### Font Dependencies
-- Google Fonts CDN: Inter (primary), Noto Sans Thai (Thai support), Urbanist (accent/logo)
-
-## Recent Changes
-
-### PostgreSQL Database Integration (Nov 29, 2025)
-- Migrated from in-memory storage to PostgreSQL database using Drizzle ORM
-- Updated schema.ts with proper Drizzle table definitions using pgTable
-- Implemented DatabaseStorage class replacing MemStorage for all CRUD operations
-- All routes now properly parse integer IDs for database operations
-- Tables created: users, bets, blocked_numbers, transactions, affiliates
-- User IDs are now integers (serial primary key) instead of strings
-- Added proper foreign key relationships between tables
-- Affiliate system properly tracks referrals and calculates 5% commission on deposits
-
-### Password Security Update (Nov 29, 2025)
-- Implemented secure password hashing using Node.js crypto module (scrypt algorithm)
-- New passwords are stored as `salt:hash` format with 32-byte salt and 64-byte key
-- Login verification uses timing-safe comparison to prevent timing attacks
-- Backward compatible: old plaintext passwords still work for existing users
-- New file: server/password.ts with hashPassword() and verifyPassword() functions
-
-### Lottery Results Page Enhancement (Nov 29, 2025)
-- Thai Government lottery: Live API integration from rayriffy.com
-- External links for all 12 lottery types to official/trusted result sources:
-  - Thai Stock: SET.or.th (ตลาดหลักทรัพย์แห่งประเทศไทย)
-  - International stocks: Investing.com
-  - Regional lotteries: Official lottery sites
-
-### Payout Rates Error Handling Enhancement (Nov 29, 2025)
-- Storage layer now throws explicit errors when payout rates are missing instead of silently using defaults
-- Bet creation endpoint catches payout rate errors and returns user-friendly "System configuration error" message
-- Admin UI shows blocking error state when payout settings are incomplete or fail to load
-- Displays count of found rates vs expected rates (e.g., "Found 7/9 rates") to help diagnose issues
-- Initialization of payout rates occurs at server startup via initializePayoutRates()
-
-### Telegram Notification System (Nov 29, 2025)
-- Real-time notifications via Telegram Bot API for all financial transactions
-- New file: server/telegram.ts with notification functions
-- Environment secrets: TELEGRAM_TOKEN and CHAT_ID stored in Replit Secrets
-- Notification types implemented:
-  1. **Customer Deposit Request** - Sent when user submits deposit request (shows "📎 มีสลิปแนบ" or "⚠️ ไม่มีสลิป")
-  2. **Customer Withdrawal Request** - Sent when user submits withdrawal request
-  3. **Customer Bet Placement** - Sent when user purchases lottery tickets (includes lottery type, bet type, numbers, amount)
-  4. **Admin Approval** - Sent when admin approves deposit/withdrawal
-  5. **Admin Rejection** - Sent when admin rejects deposit/withdrawal
-- All notifications include: username, user ID, amount, timestamp, transaction type
-- Bet notifications include detailed breakdown of each bet item
-- Admin action notifications include transaction ID for reference
-
-### Smart Checkout Flow (Nov 29, 2025)
-- **Balance-aware checkout**: Users with sufficient balance place bets directly; insufficient balance users see deposit modal
-- **Atomic transaction for bet placement**: 
-  - New storage method `createBetsWithBalanceDeduction` uses Drizzle transaction for all-or-nothing operation
-  - Creates all bets, deducts balance, and logs transaction in single atomic operation
-  - If any operation fails, entire transaction rolls back automatically
-- **Server-side validation**: Balance check performed inside transaction to prevent race conditions
-- **Frontend reliability**: Removed manual balance updates; relies on react-query cache invalidation to sync with server
-- **Flow**: Deposit → Admin approval → Balance credited → User shops → Smart checkout based on balance
-
-### Admin Slip Viewing (Nov 29, 2025)
-- Added slip image viewer in Admin page using Dialog component
-- Admins can view payment slips before approving/rejecting deposit requests
-- Shows "ดูสลิป" button when slip is available
-
-### Betting Limits System (Nov 29, 2025)
-- Admin-configurable max bet amounts per number with optional lottery type associations
-- Schema: `betLimits` table (id, number, maxAmount, isActive) with `betLimitLotteryTypes` join table (betLimitId, lotteryType)
-- Storage methods: CRUD for bet limits with transaction-safe operations
-- API endpoints: `/api/bet-limits` (GET all, POST create, PUT update, DELETE remove)
-- Admin UI: New "Limits" tab with form to add limits (number, lottery types, max amount) and table to manage existing limits
-- Enforcement: Checks limits before bet creation in `/api/bets`, returns descriptive error with max/current/remaining amounts
-- Limits can apply to all lottery types (no associations) or specific selected types
-- Per-draw enforcement: Sums existing bets for same number/lottery/draw date when checking limits
-
-### Bet Type Enable/Disable System (Nov 29, 2025)
-- Admin-configurable global toggle for each bet type (3 ตัวบน, 2 ตัวบน, วิ่งบน, etc.)
-- Schema: `betTypeSettings` table (id, betType, isEnabled, updatedAt)
-- Storage methods: `initializeBetTypeSettings()`, `getBetTypeSettings()`, `updateBetTypeSetting()`, `isBetTypeEnabled()`
-- API endpoints: `GET /api/bet-type-settings`, `PATCH /api/bet-type-settings/:betType`
-- Admin UI: New "ประเภท" (Types) tab with toggle switches for each of the 9 bet types
-- Enforcement: Each cart item validated via `isBetTypeEnabled()` before processing in `/api/bets`
-- Validation order: bet type enabled → payout rate → blocked numbers → bet limits
-- All bet types initialized as enabled on server startup
-
-### Thai Lottery Bet Types Update (Dec 1, 2025)
-- Restructured bet types to 9 new types with proper payout rates:
-  1. **TWO_TOP** (2 ตัวบน) - x60 - last 2 digits of first prize
-  2. **TWO_BOTTOM** (2 ตัวล่าง) - x60 - 2-digit bottom prize
-  3. **THREE_TOP** (3 ตัวตรง) - x500 - last 3 digits of first prize
-  4. **THREE_TOD** (3 ตัวโต๊ด) - x90 - any permutation of last 3 digits
-  5. **FOUR_TOP** (4 ตัวบน) - x900 - last 4 digits of first prize
-  6. **FIVE_TOP** (5 ตัวบน) - x2000 - last 5 digits of first prize
-  7. **RUN_TOP** (วิ่งบน) - x3 - single digit in last 3 digits
-  8. **RUN_BOTTOM** (วิ่งล่าง) - x4 - single digit in 2-digit bottom
-  9. **REVERSE** (เลขกลับ) - x94 - both orders of 2-digit bet win
-- Updated checkBetWin function with proper winning logic for all 9 bet types
-- Added support for comma-separated numbers in set bets
-- Added canProcessBet validation to skip bets when result data is incomplete
-- Updated BetTypeSelector UI with categorized bet types (2-digit, 3-digit, 4-5 digit, floating, special)
-- Updated SetCalculator with digit validation for 1-5 digit bet types
-- Removed old bet types: THREE_TOOD, THREE_FRONT, THREE_BOTTOM, THREE_REVERSE
-
-### Affiliate Commission Model Change (Dec 1, 2025)
-- Changed from 20% commission on bets to 5% commission on deposits
-- New column `totalDepositAmount` in affiliates table to track referred users' deposits
-- Commission automatically credited to referrer when referred user's deposit is approved
-- Transaction logged as type "affiliate" with reference to original deposit
-
-### Deposit Bonus System (Dec 1, 2025)
-- 10% bonus for deposits over 100 baht
-- Bonus automatically added when admin approves deposit
-- Logged as separate "bonus" transaction with reference to original deposit
-
-### SetCalculator Enhancements (Dec 1, 2025)
-- **Permutation Display**: Shows all winning numbers for THREE_TOD bets (e.g., 123 → 123, 132, 213, 231, 312, 321)
-- **Reverse Display**: Shows both orders for REVERSE bets (e.g., 12 → 12, 21)
-- **Potential Winnings**: Displays expected payout based on current payout rates
-- Fetches live payout rates from `/api/payout-settings`
-
-### New Permutation Calculator Page (Dec 1, 2025)
-- Route: `/permutation` - Accessible from sidebar navigation
-- Automatic factorial permutation generation with duplicate removal
-- Supports 2, 3, 4, and 5 digit bet types
-- Shows expected vs actual permutation count when input has repeating digits
-- Example: "123" generates 6 permutations, "112" generates only 3 due to duplicate "1"
-- Displays total amount and potential winnings per number
+- Google Fonts CDN: Inter, Noto Sans Thai, Urbanist.

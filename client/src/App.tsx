@@ -22,6 +22,7 @@ import Admin from "@/pages/Admin";
 import AdminLogin from "@/pages/AdminLogin";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import SelfCheck from "@/pages/SelfCheck";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -79,6 +80,7 @@ function Router() {
       <Route path="/wallet" component={() => <AppLayout><Wallet /></AppLayout>} />
       <Route path="/calculator" component={() => <AppLayout><SetCalculator /></AppLayout>} />
       <Route path="/permutation" component={() => <AppLayout><PermutationCalculator /></AppLayout>} />
+      <Route path="/self-check" component={() => <AppLayout><SelfCheck /></AppLayout>} />
       <Route path="/admin" component={() => <AppLayout><Admin /></AppLayout>} />
       <Route path="/admin/login" component={() => <AuthLayout><AdminLogin /></AuthLayout>} />
       <Route path="/login" component={() => <AuthLayout><Login /></AuthLayout>} />

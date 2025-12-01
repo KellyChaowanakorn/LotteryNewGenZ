@@ -136,6 +136,9 @@ export default function Admin() {
   const [limitLotteryTypes, setLimitLotteryTypes] = useState<string[]>([]);
   const [isAllLotteryTypes, setIsAllLotteryTypes] = useState(true);
 
+  const [winnersLotteryType, setWinnersLotteryType] = useState<LotteryType | "">("");
+  const [winnersDrawDate, setWinnersDrawDate] = useState(new Date().toISOString().split('T')[0]);
+
   const handleLogout = async () => {
     await logout();
     toast({
@@ -216,6 +219,58 @@ export default function Admin() {
         variant: "destructive"
       });
     }
+  });
+
+  interface WinnerInfo {
+    betId: number;
+    userId: number;
+    username: string;
+    betType: string;
+    numbers: string;
+    amount: number;
+    winAmount: number;
+    matchedNumber: string | null;
+    processedAt: string | null;
+  }
+
+  interface WinnersResponse {
+    lotteryType: string;
+    drawDate: string;
+    lotteryResult: LotteryResult | null;
+    winners: WinnerInfo[];
+    totalWinners: number;
+    totalPayout: number;
+  }
+
+  interface ProcessedDraw {
+    id: number;
+    lotteryType: string;
+    drawDate: string;
+    firstPrize: string | null;
+    twoDigitBottom: string | null;
+    totalWinners: number | null;
+    totalPayout: number | null;
+    processedAt: string | null;
+  }
+
+  const { data: processedDraws = [], isLoading: isLoadingProcessedDraws } = useQuery<ProcessedDraw[]>({
+    queryKey: ["/api/admin/processed-draws"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/processed-draws");
+      return res.json();
+    },
+    enabled: isAdminAuthenticated,
+  });
+
+  const { data: winnersData, isLoading: isLoadingWinners, refetch: refetchWinners } = useQuery<WinnersResponse>({
+    queryKey: ["/api/admin/winners", winnersLotteryType, winnersDrawDate],
+    queryFn: async () => {
+      const lotteryTypeParam = encodeURIComponent(winnersLotteryType);
+      const drawDateParam = encodeURIComponent(winnersDrawDate);
+      const res = await apiRequest("GET", `/api/admin/winners?lotteryType=${lotteryTypeParam}&drawDate=${drawDateParam}`);
+      return res.json();
+    },
+    enabled: isAdminAuthenticated && winnersLotteryType !== "" && winnersDrawDate !== "",
   });
 
   const addBlockedMutation = useMutation({
@@ -743,7 +798,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm">
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>
@@ -756,6 +811,10 @@ export default function Admin() {
             <TabsTrigger value="results" className="gap-1 text-xs sm:text-sm">
               <Trophy className="h-4 w-4" />
               <span className="hidden sm:inline">{language === "th" ? "ผลหวย" : "Results"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="winners" className="gap-1 text-xs sm:text-sm" data-testid="tab-winners">
+              <CheckCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === "th" ? "ผู้ถูกรางวัล" : "Winners"}</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="gap-1 text-xs sm:text-sm">
               <Users className="h-4 w-4" />
@@ -1072,6 +1131,219 @@ export default function Admin() {
                                 {language === "th" ? "ประมวลผล" : "Process"}
                               </Button>
                             )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="winners" className="space-y-4" data-testid="tabcontent-winners">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  {language === "th" ? "ค้นหาผู้ถูกรางวัล" : "Search Winners"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" ? "เลือกประเภทหวยและวันที่เพื่อดูรายชื่อผู้ถูกรางวัล" : "Select lottery type and date to view winners"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "ประเภทหวย" : "Lottery Type"}</Label>
+                    <Select
+                      value={winnersLotteryType}
+                      onValueChange={(value: LotteryType) => setWinnersLotteryType(value)}
+                    >
+                      <SelectTrigger data-testid="select-winners-lottery-type">
+                        <SelectValue placeholder={language === "th" ? "เลือกประเภท" : "Select type"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lotteryTypes.map((type) => (
+                          <SelectItem key={type} value={type} data-testid={`select-item-winners-lottery-${type}`}>
+                            {lotteryTypeNames[type][language]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{language === "th" ? "วันที่ออกผล" : "Draw Date"}</Label>
+                    <Input
+                      type="date"
+                      value={winnersDrawDate}
+                      onChange={(e) => setWinnersDrawDate(e.target.value)}
+                      data-testid="input-winners-draw-date"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={() => refetchWinners()}
+                      disabled={!winnersLotteryType || !winnersDrawDate || isLoadingWinners}
+                      data-testid="button-search-winners"
+                    >
+                      {isLoadingWinners ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Trophy className="h-4 w-4 mr-2" />
+                      )}
+                      {language === "th" ? "ค้นหา" : "Search"}
+                    </Button>
+                  </div>
+                </div>
+
+                {winnersData && (
+                  <div className="space-y-4 mt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-muted-foreground">{language === "th" ? "จำนวนผู้ถูกรางวัล" : "Total Winners"}</p>
+                              <p className="text-2xl font-bold">{winnersData.totalWinners}</p>
+                            </div>
+                            <Trophy className="h-8 w-8 text-green-500 opacity-50" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-muted-foreground">{language === "th" ? "เงินรางวัลรวม" : "Total Payout"}</p>
+                              <p className="text-2xl font-bold">{winnersData.totalPayout.toLocaleString()} ฿</p>
+                            </div>
+                            <DollarSign className="h-8 w-8 text-yellow-500 opacity-50" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-muted-foreground">{language === "th" ? "รางวัลที่ 1" : "First Prize"}</p>
+                              <p className="text-2xl font-bold font-mono">{winnersData.lotteryResult?.firstPrize || "-"}</p>
+                            </div>
+                            <CheckCircle className="h-8 w-8 text-blue-500 opacity-50" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {winnersData.winners.length === 0 ? (
+                      <div className="p-8 text-center text-muted-foreground" data-testid="no-winners-message">
+                        <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>{language === "th" ? "ไม่มีผู้ถูกรางวัลในงวดนี้" : "No winners in this draw"}</p>
+                      </div>
+                    ) : (
+                      <Table data-testid="table-winners">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{language === "th" ? "ผู้ใช้" : "User"}</TableHead>
+                            <TableHead>{language === "th" ? "ประเภท" : "Bet Type"}</TableHead>
+                            <TableHead>{language === "th" ? "เลขที่ซื้อ" : "Numbers"}</TableHead>
+                            <TableHead>{language === "th" ? "เลขที่ถูก" : "Matched"}</TableHead>
+                            <TableHead>{language === "th" ? "เดิมพัน" : "Bet"}</TableHead>
+                            <TableHead>{language === "th" ? "เงินรางวัล" : "Win Amount"}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {winnersData.winners.map((winner) => (
+                            <TableRow key={winner.betId} data-testid={`row-winner-${winner.betId}`}>
+                              <TableCell className="font-medium">
+                                <div>
+                                  <p>{winner.username}</p>
+                                  <p className="text-xs text-muted-foreground">ID: {winner.userId}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">
+                                  {betTypeNames[winner.betType as BetType]?.[language] || winner.betType}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-mono">{winner.numbers}</TableCell>
+                              <TableCell className="font-mono font-bold text-green-600">
+                                {winner.matchedNumber || "-"}
+                              </TableCell>
+                              <TableCell>{winner.amount.toLocaleString()} ฿</TableCell>
+                              <TableCell className="font-bold text-green-600">
+                                {winner.winAmount.toLocaleString()} ฿
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  {language === "th" ? "งวดที่ประมวลผลแล้ว" : "Processed Draws"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingProcessedDraws ? (
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : processedDraws.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{language === "th" ? "ยังไม่มีการประมวลผล" : "No processed draws yet"}</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{language === "th" ? "ประเภท" : "Type"}</TableHead>
+                        <TableHead>{language === "th" ? "วันที่" : "Date"}</TableHead>
+                        <TableHead>{language === "th" ? "รางวัลที่ 1" : "First Prize"}</TableHead>
+                        <TableHead>{language === "th" ? "2 ตัวล่าง" : "2 Bottom"}</TableHead>
+                        <TableHead>{language === "th" ? "ผู้ถูกรางวัล" : "Winners"}</TableHead>
+                        <TableHead>{language === "th" ? "เงินรางวัล" : "Payout"}</TableHead>
+                        <TableHead className="text-right">{language === "th" ? "ดู" : "View"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {processedDraws.map((draw) => (
+                        <TableRow key={draw.id} data-testid={`row-processed-draw-${draw.id}`}>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {lotteryTypeNames[draw.lotteryType as LotteryType]?.[language] || draw.lotteryType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{draw.drawDate}</TableCell>
+                          <TableCell className="font-mono font-bold">{draw.firstPrize || "-"}</TableCell>
+                          <TableCell className="font-mono">{draw.twoDigitBottom || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-500">{draw.totalWinners || 0}</Badge>
+                          </TableCell>
+                          <TableCell className="font-bold">{(draw.totalPayout || 0).toLocaleString()} ฿</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setWinnersLotteryType(draw.lotteryType as LotteryType);
+                                setWinnersDrawDate(draw.drawDate);
+                              }}
+                              data-testid={`button-view-winners-${draw.id}`}
+                            >
+                              <Trophy className="h-4 w-4 mr-1" />
+                              {language === "th" ? "ดู" : "View"}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
