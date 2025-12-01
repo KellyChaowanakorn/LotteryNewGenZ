@@ -317,8 +317,8 @@ export class DatabaseStorage implements IStorage {
 
   async getPayoutRate(betType: string): Promise<number> {
     const validBetTypes = [
-      "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
-      "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+      "TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", 
+      "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "RUN_BOTTOM", "REVERSE"
     ];
     
     if (!validBetTypes.includes(betType)) {
@@ -351,18 +351,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initializePayoutRates(): Promise<void> {
+    // อัตราจ่าย 9 ประเภทสำหรับหวยไทย
     const defaultRates: Record<string, number> = {
-      THREE_TOP: 900,
-      THREE_TOOD: 150,
-      THREE_FRONT: 450,
-      THREE_BOTTOM: 450,
-      THREE_REVERSE: 4500,
-      TWO_TOP: 90,
-      TWO_BOTTOM: 90,
-      RUN_TOP: 3.2,
-      RUN_BOTTOM: 4.2
+      TWO_TOP: 60,      // 2 ตัวบน x60
+      TWO_BOTTOM: 60,   // 2 ตัวล่าง x60
+      THREE_TOP: 500,   // 3 ตัวตรง x500
+      THREE_TOD: 90,    // 3 ตัวโต๊ด x90
+      FOUR_TOP: 900,    // 4 ตัวบน x900
+      FIVE_TOP: 2000,   // 5 ตัวบน x2000
+      RUN_TOP: 3,       // วิ่งบน x3
+      RUN_BOTTOM: 4,    // วิ่งล่าง x4
+      REVERSE: 94       // เลขกลับ x94
     };
 
+    // ลบอัตราจ่ายเก่าที่ไม่ใช้แล้ว
+    const oldBetTypes = ["THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE"];
+    for (const oldType of oldBetTypes) {
+      await db.delete(payoutSettings).where(eq(payoutSettings.betType, oldType));
+    }
+
+    // เพิ่ม/อัปเดตอัตราจ่ายใหม่
     for (const [betType, rate] of Object.entries(defaultRates)) {
       const existing = await db.select().from(payoutSettings).where(eq(payoutSettings.betType, betType));
       if (existing.length === 0) {

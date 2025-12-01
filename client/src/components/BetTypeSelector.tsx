@@ -9,8 +9,9 @@ interface BetTypeSelectorProps {
 }
 
 const betTypeCategories = {
-  threeDigit: ["THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE"] as BetType[],
-  twoDigit: ["TWO_TOP", "TWO_BOTTOM"] as BetType[],
+  twoDigit: ["TWO_TOP", "TWO_BOTTOM", "REVERSE"] as BetType[],
+  threeDigit: ["THREE_TOP", "THREE_TOD"] as BetType[],
+  fourFiveDigit: ["FOUR_TOP", "FIVE_TOP"] as BetType[],
   running: ["RUN_TOP", "RUN_BOTTOM"] as BetType[]
 };
 
@@ -52,25 +53,34 @@ export function BetTypeSelector({ selectedType, onSelect }: BetTypeSelectorProps
     <div className="space-y-4">
       <div>
         <h4 className="text-sm font-semibold text-muted-foreground mb-2">
-          {language === "th" ? "3 ตัว" : "3 Digits"}
-        </h4>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {betTypeCategories.threeDigit.map(renderBetType)}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-sm font-semibold text-muted-foreground mb-2">
           {language === "th" ? "2 ตัว" : "2 Digits"}
         </h4>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {betTypeCategories.twoDigit.map(renderBetType)}
         </div>
       </div>
 
       <div>
         <h4 className="text-sm font-semibold text-muted-foreground mb-2">
-          {language === "th" ? "วิ่ง" : "Running"}
+          {language === "th" ? "3 ตัว" : "3 Digits"}
+        </h4>
+        <div className="grid grid-cols-2 gap-2">
+          {betTypeCategories.threeDigit.map(renderBetType)}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-semibold text-muted-foreground mb-2">
+          {language === "th" ? "4-5 ตัว" : "4-5 Digits"}
+        </h4>
+        <div className="grid grid-cols-2 gap-2">
+          {betTypeCategories.fourFiveDigit.map(renderBetType)}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-semibold text-muted-foreground mb-2">
+          {language === "th" ? "วิ่ง (เลขลอย)" : "Running"}
         </h4>
         <div className="grid grid-cols-2 gap-2">
           {betTypeCategories.running.map(renderBetType)}

@@ -696,6 +696,8 @@ export async function registerRoutes(
     }
   });
 
+  // ตรวจสอบหวยถูกรางวัล - 9 ประเภทสำหรับหวยไทย
+  // รองรับทั้งเลขเดี่ยวและเลขชุด (comma-separated)
   function checkBetWin(bet: { betType: string; numbers: string }, result: {
     firstPrize?: string | null;
     threeDigitTop?: string | null;
@@ -705,54 +707,99 @@ export async function registerRoutes(
     runTop?: string | null;
     runBottom?: string | null;
   }): boolean {
-    const betNumber = bet.numbers;
+    const firstPrize = result.firstPrize;
     
-    switch (bet.betType) {
-      case "THREE_TOP":
-        return betNumber === result.firstPrize?.slice(-3);
-      
-      case "THREE_TOOD": {
-        const lastThree = result.firstPrize?.slice(-3);
-        if (!lastThree) return false;
-        const sortedBet = betNumber.split("").sort().join("");
-        const sortedResult = lastThree.split("").sort().join("");
-        return sortedBet === sortedResult;
-      }
-      
-      case "THREE_FRONT":
-        return betNumber === result.threeDigitTop;
-      
-      case "THREE_BOTTOM":
-        return betNumber === result.threeDigitBottom;
-      
-      case "THREE_REVERSE": {
-        const lastThree = result.firstPrize?.slice(-3);
-        if (!lastThree) return false;
-        const permutations = getPermutations(lastThree);
-        return permutations.includes(betNumber);
-      }
-      
-      case "TWO_TOP":
-        return betNumber === result.twoDigitTop || betNumber === result.firstPrize?.slice(-2);
-      
-      case "TWO_BOTTOM":
-        return betNumber === result.twoDigitBottom;
-      
-      case "RUN_TOP": {
-        if (result.runTop && betNumber === result.runTop) return true;
-        const lastTwo = result.twoDigitTop || result.firstPrize?.slice(-2);
-        return lastTwo ? lastTwo.includes(betNumber) : false;
-      }
-      
-      case "RUN_BOTTOM": {
-        if (result.runBottom && betNumber === result.runBottom) return true;
-        const bottomTwo = result.twoDigitBottom;
-        return bottomTwo ? bottomTwo.includes(betNumber) : false;
-      }
-      
-      default:
+    // ถ้าไม่มี firstPrize และเป็น bet type ที่ต้องใช้ firstPrize ให้ return false
+    if (!firstPrize || firstPrize.length < 2) {
+      // TWO_BOTTOM และ RUN_BOTTOM ไม่ต้องใช้ firstPrize
+      if (bet.betType !== "TWO_BOTTOM" && bet.betType !== "RUN_BOTTOM") {
         return false;
+      }
     }
+    
+    // แยกเลขที่ซื้อ (รองรับ comma-separated สำหรับหวยชุด)
+    const betNumbers = bet.numbers.split(",").map(n => n.trim()).filter(n => n.length > 0);
+    
+    // ตรวจสอบแต่ละเลขในชุด - ถ้ามีเลขใดถูกก็ถือว่าถูกรางวัล
+    for (const betNumber of betNumbers) {
+      let isWin = false;
+      
+      switch (bet.betType) {
+        // 2 ตัวบน: 2 ตัวท้ายของรางวัลที่ 1 (461252 → 52)
+        case "TWO_TOP":
+          isWin = betNumber === firstPrize?.slice(-2);
+          break;
+        
+        // 2 ตัวล่าง: รางวัลเลขท้าย 2 ตัว (รางวัลแยก เช่น 22)
+        case "TWO_BOTTOM":
+          isWin = betNumber === result.twoDigitBottom;
+          break;
+        
+        // 3 ตัวตรง: 3 ตัวท้ายของรางวัลที่ 1 (461252 → 252)
+        case "THREE_TOP":
+          isWin = betNumber === firstPrize?.slice(-3);
+          break;
+        
+        // 3 ตัวโต๊ด: สลับตำแหน่งได้ (252, 225, 522, ...)
+        case "THREE_TOD": {
+          const lastThree = firstPrize?.slice(-3);
+          if (lastThree && lastThree.length === 3 && betNumber.length === 3) {
+            const sortedBet = betNumber.split("").sort().join("");
+            const sortedResult = lastThree.split("").sort().join("");
+            isWin = sortedBet === sortedResult;
+          }
+          break;
+        }
+        
+        // 4 ตัวบน: 4 ตัวท้ายของรางวัลที่ 1 (461252 → 1252)
+        case "FOUR_TOP":
+          isWin = betNumber === firstPrize?.slice(-4);
+          break;
+        
+        // 5 ตัวบน: 5 ตัวท้ายของรางวัลที่ 1 (461252 → 61252)
+        case "FIVE_TOP":
+          isWin = betNumber === firstPrize?.slice(-5);
+          break;
+        
+        // วิ่งบน (เลขลอยบน): ซื้อ 1 ตัว ถ้าอยู่ใน 3 ตัวบน (252 → 2, 5 ถูก)
+        case "RUN_TOP": {
+          const lastThree = firstPrize?.slice(-3);
+          if (lastThree && betNumber.length === 1) {
+            isWin = lastThree.includes(betNumber);
+          }
+          break;
+        }
+        
+        // วิ่งล่าง (เลขลอยล่าง): ซื้อ 1 ตัว ถ้าอยู่ใน 2 ตัวล่าง (22 → 2 ถูก)
+        case "RUN_BOTTOM": {
+          const bottomTwo = result.twoDigitBottom;
+          if (bottomTwo && betNumber.length === 1) {
+            isWin = bottomTwo.includes(betNumber);
+          }
+          break;
+        }
+        
+        // เลขกลับ 2 ตัวบน: ซื้อ 52 ถ้าผล 52 หรือ 25 ก็ถูก
+        case "REVERSE": {
+          const lastTwo = firstPrize?.slice(-2);
+          if (lastTwo && lastTwo.length === 2 && betNumber.length === 2) {
+            const reversedBet = betNumber.split("").reverse().join("");
+            isWin = betNumber === lastTwo || reversedBet === lastTwo;
+          }
+          break;
+        }
+        
+        default:
+          isWin = false;
+      }
+      
+      // ถ้ามีเลขใดถูก ให้ return true ทันที
+      if (isWin) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   function getPermutations(str: string): string[] {
@@ -767,6 +814,31 @@ export async function registerRoutes(
       }
     }
     return Array.from(new Set(result));
+  }
+
+  // ฟังก์ชันตรวจสอบว่า bet type นี้ต้องใช้ field ใดของผลหวย
+  function canProcessBet(betType: string, result: {
+    firstPrize?: string | null;
+    twoDigitBottom?: string | null;
+  }): { canProcess: boolean; reason?: string } {
+    // bet types ที่ต้องใช้ firstPrize
+    const needsFirstPrize = ["TWO_TOP", "THREE_TOP", "THREE_TOD", "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "REVERSE"];
+    // bet types ที่ต้องใช้ twoDigitBottom
+    const needsTwoDigitBottom = ["TWO_BOTTOM", "RUN_BOTTOM"];
+    
+    if (needsFirstPrize.includes(betType)) {
+      if (!result.firstPrize || result.firstPrize.length < 5) {
+        return { canProcess: false, reason: "Missing or invalid firstPrize" };
+      }
+    }
+    
+    if (needsTwoDigitBottom.includes(betType)) {
+      if (!result.twoDigitBottom || result.twoDigitBottom.length !== 2) {
+        return { canProcess: false, reason: "Missing or invalid twoDigitBottom" };
+      }
+    }
+    
+    return { canProcess: true };
   }
 
   app.post("/api/lottery-results/:id/process", async (req, res) => {
@@ -786,6 +858,13 @@ export async function registerRoutes(
       if (lotteryResult.isProcessed) {
         return res.status(400).json({ error: "Result already processed" });
       }
+      
+      // ตรวจสอบว่าผลหวยมีข้อมูลครบ (อย่างน้อยต้องมี firstPrize)
+      if (!lotteryResult.firstPrize || lotteryResult.firstPrize.length < 5) {
+        return res.status(400).json({ 
+          error: "Cannot process: lottery result is incomplete (missing firstPrize)" 
+        });
+      }
 
       const pendingBets = await storage.getBetsByLotteryAndDate(
         lotteryResult.lotteryType, 
@@ -794,9 +873,20 @@ export async function registerRoutes(
 
       let wonCount = 0;
       let lostCount = 0;
+      let skippedCount = 0;
       let totalWinnings = 0;
 
       for (const bet of pendingBets) {
+        // ตรวจสอบว่า bet นี้สามารถประมวลผลได้หรือไม่
+        const { canProcess, reason } = canProcessBet(bet.betType, lotteryResult);
+        
+        if (!canProcess) {
+          // ข้าม bet ที่ไม่สามารถประมวลผลได้ (ยังคง pending)
+          console.log(`Skipping bet ${bet.id} (${bet.betType}): ${reason}`);
+          skippedCount++;
+          continue;
+        }
+        
         const isWinner = checkBetWin(bet, lotteryResult);
         
         if (isWinner) {
@@ -815,9 +905,10 @@ export async function registerRoutes(
 
       res.json({
         success: true,
-        processed: pendingBets.length,
+        processed: wonCount + lostCount,
         won: wonCount,
         lost: lostCount,
+        skipped: skippedCount,
         totalWinnings
       });
     } catch (error) {
@@ -1055,8 +1146,8 @@ export async function registerRoutes(
       const { rate } = req.body;
       
       const validBetTypes = [
-        "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
-        "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+        "TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD",
+        "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "RUN_BOTTOM", "REVERSE"
       ];
       
       if (!validBetTypes.includes(betType)) {
@@ -1104,8 +1195,8 @@ export async function registerRoutes(
       const { isEnabled } = req.body;
       
       const validBetTypes = [
-        "THREE_TOP", "THREE_TOOD", "THREE_FRONT", "THREE_BOTTOM", "THREE_REVERSE",
-        "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"
+        "TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD",
+        "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "RUN_BOTTOM", "REVERSE"
       ];
       
       if (!validBetTypes.includes(betType)) {

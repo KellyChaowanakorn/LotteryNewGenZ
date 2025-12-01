@@ -37,21 +37,39 @@ interface NumberSet {
 }
 
 function getRequiredDigits(betType: BetType): number {
-  if (betType === "TWO_TOP" || betType === "TWO_BOTTOM") {
-    return 2;
+  switch (betType) {
+    case "RUN_TOP":
+    case "RUN_BOTTOM":
+      return 1;
+    case "TWO_TOP":
+    case "TWO_BOTTOM":
+    case "REVERSE":
+      return 2;
+    case "THREE_TOP":
+    case "THREE_TOD":
+      return 3;
+    case "FOUR_TOP":
+      return 4;
+    case "FIVE_TOP":
+      return 5;
+    default:
+      return 2;
   }
-  if (betType === "RUN_TOP" || betType === "RUN_BOTTOM") {
-    return 1;
-  }
-  return 3;
 }
 
 function getDigitLabel(betType: BetType, language: string): string {
   const digits = getRequiredDigits(betType);
   if (language === "th") {
-    return digits === 1 ? "1 ตัว" : digits === 2 ? "2 ตัว" : "3 ตัว";
+    switch (digits) {
+      case 1: return "1 ตัว";
+      case 2: return "2 ตัว";
+      case 3: return "3 ตัว";
+      case 4: return "4 ตัว";
+      case 5: return "5 ตัว";
+      default: return `${digits} ตัว`;
+    }
   }
-  return digits === 1 ? "1 digit" : digits === 2 ? "2 digits" : "3 digits";
+  return `${digits} digit${digits > 1 ? "s" : ""}`;
 }
 
 export default function SetCalculator() {
@@ -265,8 +283,20 @@ export default function SetCalculator() {
                   <Textarea
                     id="numbers"
                     placeholder={language === "th" 
-                      ? `ตัวอย่าง: ${requiredDigits === 1 ? "1, 2, 3, 4" : requiredDigits === 2 ? "12, 34, 56, 78" : "123, 456, 789"}` 
-                      : `Example: ${requiredDigits === 1 ? "1, 2, 3, 4" : requiredDigits === 2 ? "12, 34, 56, 78" : "123, 456, 789"}`}
+                      ? `ตัวอย่าง: ${
+                          requiredDigits === 1 ? "1, 2, 3, 4" : 
+                          requiredDigits === 2 ? "12, 34, 56, 78" : 
+                          requiredDigits === 3 ? "123, 456, 789" :
+                          requiredDigits === 4 ? "1234, 5678" :
+                          "12345, 67890"
+                        }` 
+                      : `Example: ${
+                          requiredDigits === 1 ? "1, 2, 3, 4" : 
+                          requiredDigits === 2 ? "12, 34, 56, 78" : 
+                          requiredDigits === 3 ? "123, 456, 789" :
+                          requiredDigits === 4 ? "1234, 5678" :
+                          "12345, 67890"
+                        }`}
                     value={currentInput}
                     onChange={(e) => setCurrentInput(e.target.value)}
                     className="min-h-[100px] font-mono"

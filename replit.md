@@ -203,3 +203,21 @@ Preferred communication style: Simple, everyday language.
 - Enforcement: Each cart item validated via `isBetTypeEnabled()` before processing in `/api/bets`
 - Validation order: bet type enabled → payout rate → blocked numbers → bet limits
 - All bet types initialized as enabled on server startup
+
+### Thai Lottery Bet Types Update (Dec 1, 2025)
+- Restructured bet types to 9 new types with proper payout rates:
+  1. **TWO_TOP** (2 ตัวบน) - x60 - last 2 digits of first prize
+  2. **TWO_BOTTOM** (2 ตัวล่าง) - x60 - 2-digit bottom prize
+  3. **THREE_TOP** (3 ตัวตรง) - x500 - last 3 digits of first prize
+  4. **THREE_TOD** (3 ตัวโต๊ด) - x90 - any permutation of last 3 digits
+  5. **FOUR_TOP** (4 ตัวบน) - x900 - last 4 digits of first prize
+  6. **FIVE_TOP** (5 ตัวบน) - x2000 - last 5 digits of first prize
+  7. **RUN_TOP** (วิ่งบน) - x3 - single digit in last 3 digits
+  8. **RUN_BOTTOM** (วิ่งล่าง) - x4 - single digit in 2-digit bottom
+  9. **REVERSE** (เลขกลับ) - x94 - both orders of 2-digit bet win
+- Updated checkBetWin function with proper winning logic for all 9 bet types
+- Added support for comma-separated numbers in set bets
+- Added canProcessBet validation to skip bets when result data is incomplete
+- Updated BetTypeSelector UI with categorized bet types (2-digit, 3-digit, 4-5 digit, floating, special)
+- Updated SetCalculator with digit validation for 1-5 digit bet types
+- Removed old bet types: THREE_TOOD, THREE_FRONT, THREE_BOTTOM, THREE_REVERSE

@@ -19,15 +19,15 @@ const lotteryTypeNames: Record<string, string> = {
 };
 
 const betTypeNames: Record<string, string> = {
-  THREE_TOP: "3 ตัวบน",
-  THREE_TOOD: "3 ตัวโต๊ด",
-  THREE_FRONT: "3 ตัวหน้า",
-  THREE_BOTTOM: "3 ตัวล่าง",
-  THREE_REVERSE: "3 ตัวกลับ",
   TWO_TOP: "2 ตัวบน",
   TWO_BOTTOM: "2 ตัวล่าง",
+  THREE_TOP: "3 ตัวตรง",
+  THREE_TOD: "3 ตัวโต๊ด",
+  FOUR_TOP: "4 ตัวบน",
+  FIVE_TOP: "5 ตัวบน",
   RUN_TOP: "วิ่งบน",
-  RUN_BOTTOM: "วิ่งล่าง"
+  RUN_BOTTOM: "วิ่งล่าง",
+  REVERSE: "เลขกลับ"
 };
 
 export async function sendTelegramMessage(message: string): Promise<boolean> {

@@ -19,30 +19,32 @@ export const lotteryTypes = [
 
 export type LotteryType = typeof lotteryTypes[number];
 
+// 9 ประเภทสำหรับหวยไทย
 export const betTypes = [
-  "THREE_TOP",
-  "THREE_TOOD",
-  "THREE_FRONT",
-  "THREE_BOTTOM",
-  "THREE_REVERSE",
-  "TWO_TOP",
-  "TWO_BOTTOM",
-  "RUN_TOP",
-  "RUN_BOTTOM"
+  "TWO_TOP",       // 2 ตัวบน
+  "TWO_BOTTOM",    // 2 ตัวล่าง
+  "THREE_TOP",     // 3 ตัวตรง (3 ตัวบน)
+  "THREE_TOD",     // 3 ตัวโต๊ด
+  "FOUR_TOP",      // 4 ตัวบน
+  "FIVE_TOP",      // 5 ตัวบน
+  "RUN_TOP",       // วิ่งบน (เลขลอยบน)
+  "RUN_BOTTOM",    // วิ่งล่าง (เลขลอยล่าง)
+  "REVERSE"        // เลขกลับ 2 ตัวบน
 ] as const;
 
 export type BetType = typeof betTypes[number];
 
+// อัตราจ่ายเริ่มต้น (Admin สามารถเปลี่ยนได้ในหน้า Admin)
 export const payoutRates: Record<BetType, number> = {
-  THREE_TOP: 900,
-  THREE_TOOD: 150,
-  THREE_FRONT: 450,
-  THREE_BOTTOM: 450,
-  THREE_REVERSE: 4500,
-  TWO_TOP: 90,
-  TWO_BOTTOM: 90,
-  RUN_TOP: 3.2,
-  RUN_BOTTOM: 4.2
+  TWO_TOP: 60,      // 2 ตัวบน x60
+  TWO_BOTTOM: 60,   // 2 ตัวล่าง x60
+  THREE_TOP: 500,   // 3 ตัวตรง x500
+  THREE_TOD: 90,    // 3 ตัวโต๊ด x90
+  FOUR_TOP: 900,    // 4 ตัวบน x900
+  FIVE_TOP: 2000,   // 5 ตัวบน x2000
+  RUN_TOP: 3,       // วิ่งบน x3 (100 บาท ได้ 300)
+  RUN_BOTTOM: 4,    // วิ่งล่าง x4 (100 บาท ได้ 400)
+  REVERSE: 94       // เลขกลับ x94
 };
 
 export const lotteryTypeNames: Record<LotteryType, { th: string; en: string }> = {
@@ -60,15 +62,15 @@ export const lotteryTypeNames: Record<LotteryType, { th: string; en: string }> =
 };
 
 export const betTypeNames: Record<BetType, { th: string; en: string }> = {
-  THREE_TOP: { th: "3 ตัวบน", en: "3 Digits Top" },
-  THREE_TOOD: { th: "3 ตัวโต๊ด", en: "3 Digits Tood" },
-  THREE_FRONT: { th: "3 ตัวหน้า", en: "3 Digits Front" },
-  THREE_BOTTOM: { th: "3 ตัวล่าง", en: "3 Digits Bottom" },
-  THREE_REVERSE: { th: "3 ตัวกลับ", en: "3 Digits Reverse" },
   TWO_TOP: { th: "2 ตัวบน", en: "2 Digits Top" },
   TWO_BOTTOM: { th: "2 ตัวล่าง", en: "2 Digits Bottom" },
+  THREE_TOP: { th: "3 ตัวตรง", en: "3 Digits Straight" },
+  THREE_TOD: { th: "3 ตัวโต๊ด", en: "3 Digits Tod" },
+  FOUR_TOP: { th: "4 ตัวบน", en: "4 Digits Top" },
+  FIVE_TOP: { th: "5 ตัวบน", en: "5 Digits Top" },
   RUN_TOP: { th: "วิ่งบน", en: "Run Top" },
-  RUN_BOTTOM: { th: "วิ่งล่าง", en: "Run Bottom" }
+  RUN_BOTTOM: { th: "วิ่งล่าง", en: "Run Bottom" },
+  REVERSE: { th: "เลขกลับ", en: "Reverse" }
 };
 
 export const users = pgTable("users", {
