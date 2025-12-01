@@ -190,3 +190,50 @@ export async function sendAdminActionNotification(data: AdminActionNotificationD
   
   return sendTelegramMessage(message);
 }
+
+export interface WinnerInfo {
+  username: string;
+  userId: number;
+  betType: string;
+  numbers: string;
+  amount: number;
+  winAmount: number;
+  matchedNumber?: string;
+}
+
+export interface WinnersNotificationData {
+  lotteryType: string;
+  drawDate: string;
+  winners: WinnerInfo[];
+  totalPayout: number;
+}
+
+export async function sendWinnersNotification(data: WinnersNotificationData): Promise<boolean> {
+  const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+  const lotteryName = lotteryTypeNames[data.lotteryType] || data.lotteryType;
+  
+  let winnerDetails = '';
+  data.winners.forEach((winner, index) => {
+    const betTypeName = betTypeNames[winner.betType] || winner.betType;
+    winnerDetails += `\n${index + 1}. 👤 ${winner.username} (ID: ${winner.userId})`;
+    winnerDetails += `\n   📋 ${betTypeName} | เลข: ${winner.numbers}`;
+    if (winner.matchedNumber) {
+      winnerDetails += ` → ถูก: ${winner.matchedNumber}`;
+    }
+    winnerDetails += `\n   💵 เดิมพัน: ${winner.amount.toLocaleString()} → ได้: ${winner.winAmount.toLocaleString()} บาท`;
+  });
+  
+  const message = `🎉🎉🎉 <b>มีผู้ถูกรางวัล!</b> 🎉🎉🎉
+
+🎰 <b>${lotteryName}</b>
+📅 งวดวันที่: ${data.drawDate}
+🏆 จำนวนผู้ถูกรางวัล: ${data.winners.length} คน
+💰 รวมเงินรางวัลที่ต้องจ่าย: ${data.totalPayout.toLocaleString()} บาท
+
+<b>รายละเอียดผู้ถูกรางวัล:</b>
+${winnerDetails}
+
+⏰ ประมวลผลเมื่อ: ${timestamp}`;
+  
+  return sendTelegramMessage(message);
+}

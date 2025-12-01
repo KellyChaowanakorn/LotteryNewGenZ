@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
-import { sendPaymentNotification, sendWithdrawalNotification, sendBetNotification, sendAdminActionNotification, sendTelegramMessage } from "./telegram";
+import { sendPaymentNotification, sendWithdrawalNotification, sendBetNotification, sendAdminActionNotification, sendTelegramMessage, sendWinnersNotification, type WinnerInfo } from "./telegram";
 
 
 export async function registerRoutes(
@@ -854,6 +854,80 @@ export async function registerRoutes(
     return Array.from(new Set(result));
   }
 
+  function getMatchedNumber(bet: { betType: string; numbers: string }, result: {
+    firstPrize?: string | null;
+    twoDigitBottom?: string | null;
+  }): string | null {
+    const firstPrize = result.firstPrize;
+    const betNumbers = bet.numbers.split(",").map(n => n.trim()).filter(n => n.length > 0);
+    
+    for (const betNumber of betNumbers) {
+      switch (bet.betType) {
+        case "TWO_TOP":
+          if (firstPrize && betNumber === firstPrize.slice(-2)) {
+            return firstPrize.slice(-2);
+          }
+          break;
+        case "TWO_BOTTOM":
+          if (result.twoDigitBottom && betNumber === result.twoDigitBottom) {
+            return result.twoDigitBottom;
+          }
+          break;
+        case "THREE_TOP":
+          if (firstPrize && betNumber === firstPrize.slice(-3)) {
+            return firstPrize.slice(-3);
+          }
+          break;
+        case "THREE_TOD": {
+          const lastThree = firstPrize?.slice(-3);
+          if (lastThree && lastThree.length === 3 && betNumber.length === 3) {
+            const sortedBet = betNumber.split("").sort().join("");
+            const sortedResult = lastThree.split("").sort().join("");
+            if (sortedBet === sortedResult) {
+              return lastThree;
+            }
+          }
+          break;
+        }
+        case "FOUR_TOP":
+          if (firstPrize && betNumber === firstPrize.slice(-4)) {
+            return firstPrize.slice(-4);
+          }
+          break;
+        case "FIVE_TOP":
+          if (firstPrize && betNumber === firstPrize.slice(-5)) {
+            return firstPrize.slice(-5);
+          }
+          break;
+        case "RUN_TOP": {
+          const lastThree = firstPrize?.slice(-3);
+          if (lastThree && betNumber.length === 1 && lastThree.includes(betNumber)) {
+            return lastThree;
+          }
+          break;
+        }
+        case "RUN_BOTTOM": {
+          const bottomTwo = result.twoDigitBottom;
+          if (bottomTwo && betNumber.length === 1 && bottomTwo.includes(betNumber)) {
+            return bottomTwo;
+          }
+          break;
+        }
+        case "REVERSE": {
+          const lastTwo = firstPrize?.slice(-2);
+          if (lastTwo && lastTwo.length === 2 && betNumber.length === 2) {
+            const reversedBet = betNumber.split("").reverse().join("");
+            if (betNumber === lastTwo || reversedBet === lastTwo) {
+              return lastTwo;
+            }
+          }
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
   // ฟังก์ชันตรวจสอบว่า bet type นี้ต้องใช้ field ใดของผลหวย
   function canProcessBet(betType: string, result: {
     firstPrize?: string | null;
@@ -897,7 +971,6 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Result already processed" });
       }
       
-      // ตรวจสอบว่าผลหวยมีข้อมูลครบ (อย่างน้อยต้องมี firstPrize)
       if (!lotteryResult.firstPrize || lotteryResult.firstPrize.length < 5) {
         return res.status(400).json({ 
           error: "Cannot process: lottery result is incomplete (missing firstPrize)" 
@@ -913,13 +986,12 @@ export async function registerRoutes(
       let lostCount = 0;
       let skippedCount = 0;
       let totalWinnings = 0;
+      const winners: WinnerInfo[] = [];
 
       for (const bet of pendingBets) {
-        // ตรวจสอบว่า bet นี้สามารถประมวลผลได้หรือไม่
         const { canProcess, reason } = canProcessBet(bet.betType, lotteryResult);
         
         if (!canProcess) {
-          // ข้าม bet ที่ไม่สามารถประมวลผลได้ (ยังคง pending)
           console.log(`Skipping bet ${bet.id} (${bet.betType}): ${reason}`);
           skippedCount++;
           continue;
@@ -928,18 +1000,56 @@ export async function registerRoutes(
         const isWinner = checkBetWin(bet, lotteryResult);
         
         if (isWinner) {
-          await storage.updateBetStatus(bet.id, "won");
           const winAmount = bet.potentialWin;
+          const matchedNumber = getMatchedNumber(bet, lotteryResult);
+          
+          await storage.updateBetWinResult(bet.id, "won", winAmount, matchedNumber);
           await storage.updateUserBalance(bet.userId, winAmount);
+          
+          await storage.createTransaction({
+            userId: bet.userId,
+            type: "winning",
+            amount: winAmount,
+            status: "completed",
+            reference: `WIN-BET-${bet.id}-${lotteryResult.drawDate}`
+          });
+          
+          const user = await storage.getUser(bet.userId);
+          if (user) {
+            winners.push({
+              username: user.username,
+              userId: user.id,
+              betType: bet.betType,
+              numbers: bet.numbers,
+              amount: bet.amount,
+              winAmount: winAmount,
+              matchedNumber: matchedNumber || undefined
+            });
+          }
+          
           totalWinnings += winAmount;
           wonCount++;
         } else {
-          await storage.updateBetStatus(bet.id, "lost");
+          await storage.updateBetWinResult(bet.id, "lost", null, null);
           lostCount++;
         }
       }
 
-      await storage.updateLotteryResultProcessed(id);
+      await storage.markLotteryResultProcessed(
+        lotteryResult.lotteryType,
+        lotteryResult.drawDate,
+        wonCount,
+        totalWinnings
+      );
+
+      if (winners.length > 0) {
+        await sendWinnersNotification({
+          lotteryType: lotteryResult.lotteryType,
+          drawDate: lotteryResult.drawDate,
+          winners,
+          totalPayout: totalWinnings
+        });
+      }
 
       res.json({
         success: true,
@@ -947,7 +1057,8 @@ export async function registerRoutes(
         won: wonCount,
         lost: lostCount,
         skipped: skippedCount,
-        totalWinnings
+        totalWinnings,
+        winners
       });
     } catch (error) {
       console.error("Error processing lottery result:", error);
@@ -1250,6 +1361,189 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating bet type setting:", error);
       res.status(500).json({ error: "Failed to update bet type setting" });
+    }
+  });
+
+  app.get("/api/admin/winners", requireAdmin, async (req, res) => {
+    try {
+      const { lotteryType, drawDate } = req.query;
+      
+      if (!lotteryType || !drawDate) {
+        return res.status(400).json({ error: "lotteryType and drawDate are required" });
+      }
+      
+      const winners = await storage.getWinnersByDrawDate(
+        lotteryType as string,
+        drawDate as string
+      );
+      
+      const lotteryResult = await storage.getLotteryResult(
+        lotteryType as string,
+        drawDate as string
+      );
+      
+      res.json({
+        lotteryType,
+        drawDate,
+        lotteryResult,
+        winners: winners.map(w => ({
+          betId: w.id,
+          userId: w.userId,
+          username: w.user.username,
+          betType: w.betType,
+          numbers: w.numbers,
+          amount: w.amount,
+          winAmount: w.winAmount,
+          matchedNumber: w.matchedNumber,
+          processedAt: w.processedAt
+        })),
+        totalWinners: winners.length,
+        totalPayout: winners.reduce((sum, w) => sum + (w.winAmount || 0), 0)
+      });
+    } catch (error) {
+      console.error("Error fetching winners:", error);
+      res.status(500).json({ error: "Failed to fetch winners" });
+    }
+  });
+
+  app.get("/api/admin/processed-draws", requireAdmin, async (req, res) => {
+    try {
+      const allResults = await storage.getAllLotteryResults();
+      const processedResults = allResults
+        .filter(r => r.isProcessed)
+        .map(r => ({
+          id: r.id,
+          lotteryType: r.lotteryType,
+          drawDate: r.drawDate,
+          firstPrize: r.firstPrize,
+          twoDigitBottom: r.twoDigitBottom,
+          totalWinners: r.totalWinners,
+          totalPayout: r.totalPayout,
+          processedAt: r.processedAt
+        }))
+        .sort((a, b) => new Date(b.drawDate).getTime() - new Date(a.drawDate).getTime());
+      
+      res.json(processedResults);
+    } catch (error) {
+      console.error("Error fetching processed draws:", error);
+      res.status(500).json({ error: "Failed to fetch processed draws" });
+    }
+  });
+
+  app.get("/api/users/:userId/bets-check", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId, 10);
+      const { lotteryType, drawDate } = req.query;
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      
+      if (!lotteryType || !drawDate) {
+        return res.status(400).json({ error: "lotteryType and drawDate are required" });
+      }
+      
+      const userBets = await storage.getUserBetsByDrawDate(
+        userId,
+        lotteryType as string,
+        drawDate as string
+      );
+      
+      const lotteryResult = await storage.getLotteryResult(
+        lotteryType as string,
+        drawDate as string
+      );
+      
+      const betTypesPurchased = [...new Set(userBets.map(b => b.betType))];
+      const allBetTypes = [
+        "TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD",
+        "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "RUN_BOTTOM", "REVERSE"
+      ];
+      
+      const betTypeResults = allBetTypes.map(betType => {
+        const betsOfType = userBets.filter(b => b.betType === betType);
+        const purchased = betsOfType.length > 0;
+        const wonBets = betsOfType.filter(b => b.status === "won");
+        const totalWinAmount = wonBets.reduce((sum, b) => sum + (b.winAmount || 0), 0);
+        
+        return {
+          betType,
+          purchased,
+          bets: betsOfType.map(b => ({
+            id: b.id,
+            numbers: b.numbers,
+            amount: b.amount,
+            status: b.status,
+            winAmount: b.winAmount,
+            matchedNumber: b.matchedNumber,
+            processedAt: b.processedAt
+          })),
+          totalBets: betsOfType.length,
+          wonCount: wonBets.length,
+          totalWinAmount,
+          message: purchased 
+            ? (wonBets.length > 0 ? "ถูกรางวัล!" : (betsOfType[0].status === "pending" ? "รอประมวลผล" : "ไม่ถูกรางวัล"))
+            : "คุณไม่ได้ซื้อประเภทนี้"
+        };
+      });
+      
+      const totalWinnings = betTypeResults.reduce((sum, r) => sum + r.totalWinAmount, 0);
+      const totalWonBets = betTypeResults.reduce((sum, r) => sum + r.wonCount, 0);
+      
+      res.json({
+        userId,
+        lotteryType,
+        drawDate,
+        lotteryResult: lotteryResult ? {
+          firstPrize: lotteryResult.firstPrize,
+          twoDigitBottom: lotteryResult.twoDigitBottom,
+          isProcessed: lotteryResult.isProcessed,
+          processedAt: lotteryResult.processedAt
+        } : null,
+        betTypeResults,
+        summary: {
+          totalBetTypes: betTypesPurchased.length,
+          totalBets: userBets.length,
+          totalWonBets,
+          totalWinnings,
+          isProcessed: lotteryResult?.isProcessed || false
+        }
+      });
+    } catch (error) {
+      console.error("Error checking user bets:", error);
+      res.status(500).json({ error: "Failed to check user bets" });
+    }
+  });
+
+  app.get("/api/users/:userId/winning-history", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId, 10);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      
+      const winningBets = await storage.getUserWinningBets(userId);
+      
+      res.json({
+        userId,
+        winningBets: winningBets.map(b => ({
+          id: b.id,
+          lotteryType: b.lotteryType,
+          betType: b.betType,
+          numbers: b.numbers,
+          amount: b.amount,
+          winAmount: b.winAmount,
+          matchedNumber: b.matchedNumber,
+          drawDate: b.drawDate,
+          processedAt: b.processedAt
+        })),
+        totalWinnings: winningBets.reduce((sum, b) => sum + (b.winAmount || 0), 0),
+        totalWonBets: winningBets.length
+      });
+    } catch (error) {
+      console.error("Error fetching winning history:", error);
+      res.status(500).json({ error: "Failed to fetch winning history" });
     }
   });
 
