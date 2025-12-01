@@ -86,6 +86,13 @@ export interface IStorage {
   updateBetTypeSetting(betType: string, isEnabled: boolean): Promise<BetTypeSetting>;
   initializeBetTypeSettings(): Promise<void>;
   isBetTypeEnabled(betType: string): Promise<boolean>;
+  
+  getPendingBetsByDrawDate(lotteryType: string, drawDate: string): Promise<Bet[]>;
+  updateBetWinResult(betId: number, status: 'won' | 'lost', winAmount: number | null, matchedNumber: string | null): Promise<Bet | undefined>;
+  getWinnersByDrawDate(lotteryType: string, drawDate: string): Promise<(Bet & { user: User })[]>;
+  getUserWinningBets(userId: number, drawDate?: string): Promise<Bet[]>;
+  getUserBetsByDrawDate(userId: number, lotteryType: string, drawDate: string): Promise<Bet[]>;
+  markLotteryResultProcessed(lotteryType: string, drawDate: string, totalWinners: number, totalPayout: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -574,6 +581,119 @@ export class DatabaseStorage implements IStorage {
   async isBetTypeEnabled(betType: string): Promise<boolean> {
     const setting = await this.getBetTypeSetting(betType);
     return setting?.isEnabled ?? true;
+  }
+
+  async getPendingBetsByDrawDate(lotteryType: string, drawDate: string): Promise<Bet[]> {
+    return db
+      .select()
+      .from(bets)
+      .where(
+        and(
+          eq(bets.lotteryType, lotteryType),
+          eq(bets.drawDate, drawDate),
+          eq(bets.status, "pending")
+        )
+      );
+  }
+
+  async updateBetWinResult(
+    betId: number,
+    status: 'won' | 'lost',
+    winAmount: number | null,
+    matchedNumber: string | null
+  ): Promise<Bet | undefined> {
+    const [updated] = await db
+      .update(bets)
+      .set({
+        status,
+        winAmount,
+        matchedNumber,
+        processedAt: new Date()
+      })
+      .where(eq(bets.id, betId))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getWinnersByDrawDate(lotteryType: string, drawDate: string): Promise<(Bet & { user: User })[]> {
+    const winningBets = await db
+      .select()
+      .from(bets)
+      .where(
+        and(
+          eq(bets.lotteryType, lotteryType),
+          eq(bets.drawDate, drawDate),
+          eq(bets.status, "won")
+        )
+      );
+    
+    const result: (Bet & { user: User })[] = [];
+    for (const bet of winningBets) {
+      const user = await this.getUser(bet.userId);
+      if (user) {
+        result.push({ ...bet, user });
+      }
+    }
+    return result;
+  }
+
+  async getUserWinningBets(userId: number, drawDate?: string): Promise<Bet[]> {
+    if (drawDate) {
+      return db
+        .select()
+        .from(bets)
+        .where(
+          and(
+            eq(bets.userId, userId),
+            eq(bets.drawDate, drawDate),
+            eq(bets.status, "won")
+          )
+        );
+    }
+    return db
+      .select()
+      .from(bets)
+      .where(
+        and(
+          eq(bets.userId, userId),
+          eq(bets.status, "won")
+        )
+      );
+  }
+
+  async getUserBetsByDrawDate(userId: number, lotteryType: string, drawDate: string): Promise<Bet[]> {
+    return db
+      .select()
+      .from(bets)
+      .where(
+        and(
+          eq(bets.userId, userId),
+          eq(bets.lotteryType, lotteryType),
+          eq(bets.drawDate, drawDate)
+        )
+      );
+  }
+
+  async markLotteryResultProcessed(
+    lotteryType: string,
+    drawDate: string,
+    totalWinners: number,
+    totalPayout: number
+  ): Promise<void> {
+    await db
+      .update(lotteryResults)
+      .set({
+        isProcessed: true,
+        processedAt: new Date(),
+        totalWinners,
+        totalPayout
+      })
+      .where(
+        and(
+          eq(lotteryResults.lotteryType, lotteryType),
+          eq(lotteryResults.drawDate, drawDate)
+        )
+      );
   }
 }
 

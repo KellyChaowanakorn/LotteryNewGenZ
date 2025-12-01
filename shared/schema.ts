@@ -103,6 +103,9 @@ export const bets = pgTable("bets", {
   potentialWin: real("potential_win").notNull(),
   status: text("status").notNull().default("pending"),
   drawDate: text("draw_date").notNull(),
+  winAmount: real("win_amount"),
+  matchedNumber: text("matched_number"),
+  processedAt: timestamp("processed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow()
 });
 
@@ -174,6 +177,9 @@ export const lotteryResults = pgTable("lottery_results", {
   runTop: text("run_top"),
   runBottom: text("run_bottom"),
   isProcessed: boolean("is_processed").notNull().default(false),
+  processedAt: timestamp("processed_at"),
+  totalWinners: integer("total_winners"),
+  totalPayout: real("total_payout"),
   createdAt: timestamp("created_at").notNull().defaultNow()
 });
 
