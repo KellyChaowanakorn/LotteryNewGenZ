@@ -1,87 +1,79 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useI18n } from "@/lib/i18n";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useI18n, type Language } from "@/lib/i18n";
 import { lotteryTypeNames, type LotteryType } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
-import { 
-  Trophy, 
-  ExternalLink, 
-  Clock, 
-  Wifi, 
+import {
+  Trophy,
+  ExternalLink,
+  Clock,
+  Wifi,
   RefreshCw,
   Landmark,
   TrendingUp,
   Globe,
   Zap,
-  ShieldCheck,
-  ArrowUpRight
+  AlertCircle,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown,
 } from "lucide-react";
-import { useState } from "react";
 
-interface ResultData {
-  firstPrize?: string;
-  threeTop?: string[];
-  threeBottom?: string[];
-  twoDigit?: string;
+// ------------------ TYPE DEFINITIONS ------------------
+
+interface LotteryResult {
+  lotteryType: string;
   date: string;
-  isLive: boolean;
-  externalUrl: string;
+  firstPrize?: string;
+  threeDigitTop?: string;
+  threeDigitBottom?: string;
+  twoDigitTop?: string;
+  twoDigitBottom?: string;
+  source: string;
+  error?: string;
 }
 
-interface StockData {
-  name: string;
+interface StockResult {
+  lotteryType: string;
+  date: string;
   symbol: string;
   price: number;
-  formattedPrice: string;
-  change: string;
-  changePercent: string;
+  change: number;
+  changePercent: number;
   twoDigit: string;
   threeDigit: string;
   marketState: string;
-}
-
-interface HanoiLotteryData {
-  date: string;
-  firstPrize: string;
-  twoDigit: string;
-  threeDigit: string;
-  prizes: {
-    special: string;
-    g1: string[];
-    g2: string[];
-    g3: string[];
-    g4: string[];
-    g5: string[];
-    g6: string[];
-    g7: string[];
-  };
-  isLive: boolean;
   source: string;
 }
 
-interface ThaiLottoApiResponse {
+interface ThaiGovResult {
   status: string;
   response: {
     date: string;
-    endpoint: string;
     prizes: Array<{
       id: string;
       name: string;
-      reward: string;
-      amount: number;
       number: string[];
     }>;
     runningNumbers: Array<{
       id: string;
       name: string;
-      reward: string;
       number: string[];
     }>;
   };
 }
+
+// ------------------ CONSTANTS ------------------
 
 const externalUrls: Record<LotteryType, string> = {
   THAI_GOV: "https://www.glo.or.th/",
@@ -94,615 +86,417 @@ const externalUrls: Record<LotteryType, string> = {
   HANOI: "https://www.sealotto.com/en/vietnam/hanoi",
   MALAYSIA: "https://www.check4d.org/",
   SINGAPORE: "https://www.singaporepools.com.sg/en/product/Pages/4d_results.aspx",
-  KENO: "https://nclottery.com/keno-results"
+  KENO: "https://nclottery.com/keno-results",
 };
 
-const externalUrlNames: Record<LotteryType, { th: string; en: string }> = {
-  THAI_GOV: { th: "สำนักงานสลากกินแบ่งรัฐบาล", en: "GLO Official" },
-  THAI_STOCK: { th: "SET Index", en: "SET Index" },
-  STOCK_NIKKEI: { th: "Investing.com", en: "Investing.com" },
-  STOCK_DOW: { th: "Investing.com", en: "Investing.com" },
-  STOCK_FTSE: { th: "Investing.com", en: "Investing.com" },
-  STOCK_DAX: { th: "Investing.com", en: "Investing.com" },
-  LAO: { th: "Sanook หวยลาว", en: "Sanook Lao" },
-  HANOI: { th: "SEA Lotto", en: "SEA Lotto" },
-  MALAYSIA: { th: "Check4D", en: "Check4D" },
-  SINGAPORE: { th: "Singapore Pools", en: "Singapore Pools" },
-  KENO: { th: "NC Lottery", en: "NC Lottery" }
+const categories: Record<string, LotteryType[]> = {
+  thai: ["THAI_GOV", "THAI_STOCK"],
+  stock: ["STOCK_NIKKEI", "STOCK_DOW", "STOCK_FTSE", "STOCK_DAX"],
+  foreign: ["LAO", "MALAYSIA", "SINGAPORE", "HANOI"],
+  instant: ["KENO"],
 };
 
-const categories = {
-  thai: ["THAI_GOV", "THAI_STOCK"] as LotteryType[],
-  stock: ["STOCK_NIKKEI", "STOCK_DOW", "STOCK_FTSE", "STOCK_DAX"] as LotteryType[],
-  foreign: ["LAO", "HANOI", "MALAYSIA", "SINGAPORE"] as LotteryType[],
-  instant: ["KENO"] as LotteryType[]
-};
-
-const categoryIcons = {
+const categoryIcons: Record<string, JSX.Element> = {
   thai: <Landmark className="h-4 w-4" />,
   stock: <TrendingUp className="h-4 w-4" />,
   foreign: <Globe className="h-4 w-4" />,
-  instant: <Zap className="h-4 w-4" />
+  instant: <Zap className="h-4 w-4" />,
 };
 
-function parseThaiLottoResult(data: ThaiLottoApiResponse): ResultData | null {
-  if (data.status !== "success" || !data.response) return null;
-  
-  const { response } = data;
-  const firstPrize = response.prizes.find(p => p.id === "prizeFirst")?.number[0];
-  const threeTop = response.prizes.find(p => p.id === "prizeFirstNear")?.number || [];
-  const last3f = response.runningNumbers.find(r => r.id === "runningNumberFrontThree")?.number || [];
-  const last3b = response.runningNumbers.find(r => r.id === "runningNumberBackThree")?.number || [];
-  const last2 = response.runningNumbers.find(r => r.id === "runningNumberBackTwo")?.number[0];
+const categoryNames: Record<string, Record<Language, string>> = {
+  thai: { th: "หวยไทย", en: "Thai Lottery" },
+  stock: { th: "หวยหุ้น", en: "Stock Market" },
+  foreign: { th: "หวยต่างประเทศ", en: "Foreign Lottery" },
+  instant: { th: "เกมส์ทันที", en: "Instant Games" },
+};
 
-  return {
-    firstPrize,
-    threeTop: [...last3f],
-    threeBottom: [...last3b],
-    twoDigit: last2,
-    date: response.date,
-    isLive: true,
-    externalUrl: externalUrls.THAI_GOV
+// ------------------ COMPONENTS ------------------
+
+function ThaiGovCard({ language }: { language: Language }) {
+  const { data, isLoading, error, refetch } = useQuery<ThaiGovResult>({
+    queryKey: ["/api/results/live/thai-gov"],
+    refetchInterval: 60000, // refresh every 1 minute
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-32 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error || !data || data.status !== "success") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{lotteryTypeNames.THAI_GOV[language]}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {language === "th" ? "ไม่สามารถโหลดข้อมูลได้" : "Failed to load data"}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const firstPrize = data.response.prizes.find((p) => p.id === "prizeFirst")?.number[0];
+  const threeTop = data.response.runningNumbers.find((r) => r.id === "runningNumberFrontThree")?.number || [];
+  const twoBottom = data.response.runningNumbers.find((r) => r.id === "runningNumberBackTwo")?.number[0];
+
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            {lotteryTypeNames.THAI_GOV[language]}
+          </span>
+          <Badge variant="outline" className="gap-1">
+            <Wifi className="h-3 w-3 text-green-500" />
+            {language === "th" ? "สด" : "Live"}
+          </Badge>
+        </CardTitle>
+        <CardDescription className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          {data.response.date}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950 dark:to-orange-950 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-2">
+            {language === "th" ? "รางวัลที่ 1" : "First Prize"}
+          </p>
+          <p className="text-4xl font-bold tracking-wider font-mono">
+            {firstPrize || "---"}
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-3 bg-muted rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">
+              {language === "th" ? "3 ตัวบน" : "3D Top"}
+            </p>
+            <div className="flex flex-wrap gap-1 justify-center">
+              {threeTop.slice(0, 2).map((num, i) => (
+                <span key={i} className="text-sm font-bold font-mono">{num}</span>
+              ))}
+            </div>
+          </div>
+          <div className="text-center p-3 bg-muted rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">
+              {language === "th" ? "2 ตัวล่าง" : "2D Bottom"}
+            </p>
+            <p className="text-lg font-bold font-mono">{twoBottom || "--"}</p>
+          </div>
+        </div>
+
+        <Button variant="outline" className="w-full" onClick={() => refetch()}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          {language === "th" ? "รีเฟรช" : "Refresh"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StockCard({ lotteryType, language }: { lotteryType: LotteryType; language: Language }) {
+  const stockSymbolMap: Record<string, string> = {
+    STOCK_NIKKEI: "NIKKEI",
+    STOCK_DOW: "DOW",
+    STOCK_FTSE: "FTSE",
+    STOCK_DAX: "DAX",
   };
-}
 
-function StockResultCard({ type, stockData, isLoading }: { 
-  type: LotteryType; 
-  stockData?: StockData | null;
-  isLoading?: boolean;
-}) {
-  const { language } = useI18n();
-  const name = lotteryTypeNames[type][language];
-  const externalUrl = externalUrls[type];
-  const siteName = externalUrlNames[type][language];
+  const apiUrl = lotteryType === "THAI_STOCK" 
+    ? "/api/results/live/thai-stock"
+    : `/api/results/live/stock/${stockSymbolMap[lotteryType]}`;
+
+  const { data, isLoading, error, refetch } = useQuery<StockResult>({
+    queryKey: [apiUrl],
+    refetchInterval: 30000, // refresh every 30 seconds
+  });
 
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{name}</CardTitle>
+        <CardHeader>
+          <Skeleton className="h-6 w-3/4" />
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-10 w-32" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
         </CardContent>
       </Card>
     );
   }
 
-  const isPositive = stockData && parseFloat(stockData.change) >= 0;
+  if (error || !data) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{lotteryTypeNames[lotteryType][language]}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {language === "th" ? "ไม่สามารถโหลดข้อมูลได้" : "Failed to load data"}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isPositive = data.change >= 0;
 
   return (
-    <Card className="hover-elevate transition-all" data-testid={`card-result-${type}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base">{name}</CardTitle>
-          {stockData ? (
-            <Badge variant="secondary" className="gap-1">
-              <Wifi className="h-3 w-3" />
-              LIVE
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1">
-              <ExternalLink className="h-3 w-3" />
-              {language === "th" ? "ลิงก์ภายนอก" : "External"}
-            </Badge>
-          )}
-        </div>
-        {stockData && (
-          <CardDescription className="flex items-center gap-2">
-            <span className="text-xs">{stockData.symbol}</span>
-            <Badge variant={stockData.marketState === "REGULAR" ? "default" : "secondary"} className="text-xs px-1.5 py-0">
-              {stockData.marketState === "REGULAR" ? (language === "th" ? "เปิดตลาด" : "Open") : (language === "th" ? "ปิดตลาด" : "Closed")}
-            </Badge>
-          </CardDescription>
-        )}
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <TrendingUpIcon className="h-5 w-5 text-blue-500" />
+            {lotteryTypeNames[lotteryType][language]}
+          </span>
+          <Badge variant={data.marketState === "REGULAR" ? "default" : "secondary"}>
+            {data.marketState}
+          </Badge>
+        </CardTitle>
+        <CardDescription>{data.date}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {stockData ? (
-          <>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">
-                {language === "th" ? "ราคาล่าสุด" : "Latest Price"}
-              </p>
-              <div className="text-2xl font-bold font-mono tracking-wide text-primary">
-                {stockData.formattedPrice}
-              </div>
-              <div className={`text-sm font-medium ${isPositive ? "text-green-500" : "text-red-500"}`}>
-                {isPositive ? "+" : ""}{stockData.change} ({isPositive ? "+" : ""}{stockData.changePercent}%)
-              </div>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div>
+            <p className="text-sm text-muted-foreground">{language === "th" ? "ราคา" : "Price"}</p>
+            <p className="text-2xl font-bold">{data.price.toLocaleString()}</p>
+          </div>
+          <div className="text-right">
+            <div className={`flex items-center gap-1 ${isPositive ? "text-green-600" : "text-red-600"}`}>
+              {isPositive ? <TrendingUpIcon className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              <span className="font-semibold">{data.changePercent.toFixed(2)}%</span>
             </div>
+            <p className="text-sm">{isPositive ? "+" : ""}{data.change.toFixed(2)}</p>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "3 ตัวท้าย" : "Last 3 Digits"}
-                </p>
-                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
-                  {stockData.threeDigit}
-                </Badge>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "2 ตัวท้าย" : "Last 2 Digits"}
-                </p>
-                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
-                  {stockData.twoDigit}
-                </Badge>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-2 text-muted-foreground">
-            <p className="text-sm mb-3">
-              {language === "th" 
-                ? "ไม่สามารถโหลดข้อมูลหุ้นได้" 
-                : "Unable to load stock data"}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-3 bg-primary/10 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">
+              {language === "th" ? "3 ตัว" : "3D"}
             </p>
+            <p className="text-xl font-bold font-mono">{data.threeDigit}</p>
           </div>
-        )}
+          <div className="text-center p-3 bg-primary/10 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">
+              {language === "th" ? "2 ตัว" : "2D"}
+            </p>
+            <p className="text-xl font-bold font-mono">{data.twoDigit}</p>
+          </div>
+        </div>
 
-        <a 
-          href={externalUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
-          data-testid={`button-external-${type}`}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-full bg-emerald-500/20">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
-              </p>
-              <p className="text-sm font-semibold text-foreground">{siteName}</p>
-            </div>
-          </div>
-          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
-            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-        </a>
+        <Button variant="outline" className="w-full" onClick={() => refetch()}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          {language === "th" ? "รีเฟรช" : "Refresh"}
+        </Button>
       </CardContent>
     </Card>
   );
 }
 
-function HanoiResultCard({ hanoiData, isLoading }: { 
-  hanoiData?: HanoiLotteryData | null;
-  isLoading?: boolean;
-}) {
-  const { language } = useI18n();
-  const name = lotteryTypeNames.HANOI[language];
-  const externalUrl = externalUrls.HANOI;
-  const siteName = externalUrlNames.HANOI[language];
+function ForeignLotteryCard({ language }: { language: Language }) {
+  const { data, isLoading, error, refetch } = useQuery<LotteryResult[]>({
+    queryKey: ["/api/results/live/foreign"],
+    refetchInterval: 120000, // refresh every 2 minutes
+  });
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{name}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-10 w-32" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        </CardContent>
-      </Card>
+      <>
+        {["LAO", "MALAYSIA", "SINGAPORE"].map((type) => (
+          <Card key={type}>
+            <CardHeader>
+              <Skeleton className="h-6 w-3/4" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </>
     );
   }
 
-  return (
-    <Card className="hover-elevate transition-all" data-testid="card-result-HANOI">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base">{name}</CardTitle>
-          {hanoiData ? (
-            <Badge variant="secondary" className="gap-1">
-              <Wifi className="h-3 w-3" />
-              LIVE
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1">
-              <ExternalLink className="h-3 w-3" />
-              {language === "th" ? "ลิงก์ภายนอก" : "External"}
-            </Badge>
-          )}
-        </div>
-        {hanoiData && (
-          <CardDescription className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {hanoiData.date}
-          </CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {hanoiData ? (
-          <>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">
-                {language === "th" ? "รางวัลพิเศษ" : "Special Prize"}
-              </p>
-              <div className="text-2xl font-bold font-mono tracking-widest text-primary">
-                {hanoiData.firstPrize}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "3 ตัวท้าย" : "Last 3 Digits"}
-                </p>
-                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
-                  {hanoiData.threeDigit}
-                </Badge>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "2 ตัวท้าย" : "Last 2 Digits"}
-                </p>
-                <Badge className="font-mono text-lg px-3 bg-primary/10 text-primary border-primary/20">
-                  {hanoiData.twoDigit}
-                </Badge>
-              </div>
-            </div>
-
-            {hanoiData.prizes.g7 && hanoiData.prizes.g7.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "รางวัลเลข 2 ตัว" : "2-Digit Prizes"}
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {hanoiData.prizes.g7.slice(0, 4).map((num, i) => (
-                    <Badge key={i} variant="secondary" className="font-mono text-sm">
-                      {num}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-4 text-muted-foreground">
-            <Globe className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-            <p className="text-sm">
-              {language === "th" 
-                ? "กดปุ่มด้านล่างเพื่อดูผลหวยล่าสุด" 
-                : "Click below to view latest results"}
-            </p>
-          </div>
-        )}
-
-        <a 
-          href={externalUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
-          data-testid="button-external-HANOI"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-full bg-emerald-500/20">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
-              </p>
-              <p className="text-sm font-semibold text-foreground">{siteName}</p>
-            </div>
-          </div>
-          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
-            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-        </a>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ResultCard({ type, thaiGovResult, isLoading, isError }: { 
-  type: LotteryType; 
-  thaiGovResult?: ResultData | null;
-  isLoading?: boolean;
-  isError?: boolean;
-}) {
-  const { language } = useI18n();
-  const name = lotteryTypeNames[type][language];
-  const externalUrl = externalUrls[type];
-  const siteName = externalUrlNames[type][language];
-  
-  const result = type === "THAI_GOV" && !isError ? thaiGovResult : null;
-
-  if (isLoading && type === "THAI_GOV") {
+  if (error || !data) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{name}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-10 w-32" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
+      <Card className="col-span-full">
+        <CardContent className="pt-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {language === "th" ? "ไม่สามารถโหลดข้อมูลหวยต่างประเทศได้" : "Failed to load foreign lottery data"}
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="hover-elevate transition-all" data-testid={`card-result-${type}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base">{name}</CardTitle>
-          {result ? (
-            <Badge variant="secondary" className="gap-1">
-              <Wifi className="h-3 w-3" />
-              API
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1">
-              <ExternalLink className="h-3 w-3" />
-              {language === "th" ? "ลิงก์ภายนอก" : "External"}
-            </Badge>
-          )}
-        </div>
-        {result && (
-          <CardDescription className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {result.date}
-          </CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {result ? (
-          <>
-            {result.firstPrize && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {language === "th" ? "รางวัลที่ 1" : "First Prize"}
-                </p>
-                <div className="text-3xl font-bold font-mono tracking-widest text-primary">
-                  {result.firstPrize}
+    <>
+      {data.map((result) => (
+        <Card key={result.lotteryType} className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-purple-500" />
+                {lotteryTypeNames[result.lotteryType as LotteryType][language]}
+              </span>
+              {result.error ? (
+                <Badge variant="destructive">{language === "th" ? "ข้อผิดพลาด" : "Error"}</Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1">
+                  <Wifi className="h-3 w-3 text-green-500" />
+                  {language === "th" ? "สด" : "Live"}
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>{result.date}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {result.error ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{result.error}</AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {language === "th" ? "รางวัลที่ 1" : "First Prize"}
+                  </p>
+                  <p className="text-3xl font-bold tracking-wider font-mono">
+                    {result.firstPrize || "N/A"}
+                  </p>
                 </div>
-              </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {language === "th" ? "3 ตัว" : "3D"}
+                    </p>
+                    <p className="text-lg font-bold font-mono">{result.threeDigitTop || "---"}</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {language === "th" ? "2 ตัว" : "2D"}
+                    </p>
+                    <p className="text-lg font-bold font-mono">{result.twoDigitTop || "--"}</p>
+                  </div>
+                </div>
+
+                <Button variant="outline" className="w-full" asChild>
+                  <a href={externalUrls[result.lotteryType as LotteryType]} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    {language === "th" ? "ดูผลหวย" : "View Results"}
+                  </a>
+                </Button>
+              </>
             )}
-
-            <div className="grid grid-cols-2 gap-3">
-              {result.threeTop && result.threeTop.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === "th" ? "3 ตัวหน้า" : "Front 3"}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {result.threeTop.map((num, i) => (
-                      <Badge key={i} variant="secondary" className="font-mono text-sm">
-                        {num}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {result.threeBottom && result.threeBottom.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === "th" ? "3 ตัวท้าย" : "Back 3"}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {result.threeBottom.map((num, i) => (
-                      <Badge key={i} variant="secondary" className="font-mono text-sm">
-                        {num}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {result.twoDigit && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === "th" ? "2 ตัวท้าย" : "Last 2"}
-                  </p>
-                  <Badge variant="secondary" className="font-mono text-lg px-3">
-                    {result.twoDigit}
-                  </Badge>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-4 text-muted-foreground">
-            <Globe className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-            <p className="text-sm">
-              {language === "th" 
-                ? "กดปุ่มด้านล่างเพื่อดูผลหวยล่าสุด" 
-                : "Click below to view latest results"}
-            </p>
-          </div>
-        )}
-
-        <a 
-          href={externalUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center justify-between w-full p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group"
-          data-testid={`button-external-${type}`}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-full bg-emerald-500/20">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                {language === "th" ? "เว็บไซต์ทางการ" : "Official Source"}
-              </p>
-              <p className="text-sm font-semibold text-foreground">{siteName}</p>
-            </div>
-          </div>
-          <div className="p-2 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
-            <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-        </a>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      ))}
+    </>
   );
 }
+
+// ------------------ MAIN COMPONENT ------------------
 
 export default function Results() {
   const { language, t } = useI18n();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const { data: thaiGovData, isLoading: isLoadingThaiGov, refetch: refetchThaiGov, isError } = useQuery<ThaiLottoApiResponse>({
-    queryKey: ["thai-lotto-api"],
-    queryFn: async () => {
-      const latestRes = await fetch("https://lotto.api.rayriffy.com/latest");
-      const latestData = await latestRes.json();
-      
-      if (latestData.status === "success" && latestData.response) {
-        if (latestData.response.date && latestData.response.prizes) {
-          return latestData;
-        }
-        if (Array.isArray(latestData.response) && latestData.response.length > 0) {
-          const responseArr = latestData.response;
-          const latestId = responseArr[responseArr.length - 1].id;
-          const resultRes = await fetch(`https://lotto.api.rayriffy.com/lotto/${latestId}`);
-          return resultRes.json();
-        }
-      }
-      throw new Error("No lottery data available");
-    },
-    staleTime: 1000 * 60 * 5,
-    retry: 2
-  });
-
-  const { data: stockData, isLoading: isLoadingStock, refetch: refetchStock } = useQuery<Record<string, StockData>>({
-    queryKey: ["/api/stock-data"],
-    staleTime: 1000 * 60 * 2,
-    retry: 2
-  });
-
-  const { data: hanoiData, isLoading: isLoadingHanoi, refetch: refetchHanoi } = useQuery<HanoiLotteryData>({
-    queryKey: ["/api/hanoi-lottery"],
-    staleTime: 1000 * 60 * 5,
-    retry: 2
-  });
-
-  const thaiGovResult = thaiGovData ? parseThaiLottoResult(thaiGovData) : null;
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await Promise.all([refetchThaiGov(), refetchStock(), refetchHanoi()]);
-    setTimeout(() => setIsRefreshing(false), 500);
-  };
-
-  const isStockType = (type: LotteryType) => 
-    ["STOCK_NIKKEI", "STOCK_DOW", "STOCK_FTSE", "STOCK_DAX", "THAI_STOCK"].includes(type);
-
-  const categoryNames = {
-    thai: language === "th" ? "หวยไทย" : "Thai",
-    stock: language === "th" ? "หวยหุ้น" : "Stock",
-    foreign: language === "th" ? "ต่างประเทศ" : "Foreign",
-    instant: language === "th" ? "หวยด่วน" : "Instant"
-  };
+  const [activeTab, setActiveTab] = useState("thai");
 
   return (
-    <div className="min-h-full">
-      <div className="bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4 md:p-6 border-b border-border">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <Trophy className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold">{t("results.title")}</h1>
-              <p className="text-sm text-muted-foreground">{t("results.latest")}</p>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh}
-            disabled={isRefreshing || isLoadingThaiGov}
-            data-testid="button-refresh-results"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-            {language === "th" ? "รีเฟรช" : "Refresh"}
-          </Button>
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Trophy className="h-8 w-8 text-yellow-500" />
+            {t("results.title")}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {language === "th" ? "ผลหวยทุกประเภท อัพเดทแบบเรียลไทม์" : "All lottery results, updated in real-time"}
+          </p>
         </div>
       </div>
 
-      <div className="p-4 md:p-6">
-        <Card className="mb-4 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Globe className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">
-                  {language === "th" ? "เช็คผลหวยจากเว็บไซต์ทางการ" : "Check Results from Official Sites"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {language === "th" 
-                    ? "กดปุ่ม \"เปิด...\" ในแต่ละการ์ดเพื่อไปยังเว็บไซต์ทางการสำหรับผลหวยล่าสุด" 
-                    : "Click \"Open...\" button on each card to visit official sites for latest results"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="thai" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            {Object.entries(categoryNames).map(([key, name]) => (
-              <TabsTrigger key={key} value={key} className="gap-1">
-                {categoryIcons[key as keyof typeof categoryIcons]}
-                <span className="hidden sm:inline">{name}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {Object.entries(categories).map(([key, types]) => (
-            <TabsContent key={key} value={key}>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {types.map((type) => (
-                  isStockType(type) ? (
-                    <StockResultCard 
-                      key={type} 
-                      type={type} 
-                      stockData={stockData?.[type] || null}
-                      isLoading={isLoadingStock}
-                    />
-                  ) : type === "HANOI" ? (
-                    <HanoiResultCard 
-                      key={type}
-                      hanoiData={hanoiData || null}
-                      isLoading={isLoadingHanoi}
-                    />
-                  ) : (
-                    <ResultCard 
-                      key={type} 
-                      type={type} 
-                      thaiGovResult={type === "THAI_GOV" ? thaiGovResult : null}
-                      isLoading={type === "THAI_GOV" && isLoadingThaiGov}
-                      isError={type === "THAI_GOV" && isError}
-                    />
-                  )
-                ))}
-              </div>
-            </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-4">
+          {Object.keys(categories).map((cat) => (
+            <TabsTrigger key={cat} value={cat} className="gap-2">
+              {categoryIcons[cat]}
+              {categoryNames[cat][language]}
+            </TabsTrigger>
           ))}
-        </Tabs>
-      </div>
+        </TabsList>
+
+        {/* Thai Lotteries */}
+        <TabsContent value="thai" className="space-y-4 mt-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <ThaiGovCard language={language} />
+            <StockCard lotteryType="THAI_STOCK" language={language} />
+          </div>
+        </TabsContent>
+
+        {/* Stock Markets */}
+        <TabsContent value="stock" className="space-y-4 mt-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {categories.stock.map((type) => (
+              <StockCard key={type} lotteryType={type} language={language} />
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* Foreign Lotteries */}
+        <TabsContent value="foreign" className="space-y-4 mt-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <ForeignLotteryCard language={language} />
+          </div>
+        </TabsContent>
+
+        {/* Instant Games */}
+        <TabsContent value="instant" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                {lotteryTypeNames.KENO[language]}
+              </CardTitle>
+              <CardDescription>
+                {language === "th" ? "เร็วๆ นี้" : "Coming Soon"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert>
+                <AlertDescription>
+                  {language === "th" 
+                    ? "ระบบเกมส์คีโนจะเปิดให้บริการเร็วๆ นี้" 
+                    : "Keno game system coming soon"}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

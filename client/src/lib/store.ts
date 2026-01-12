@@ -1,11 +1,28 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CartItem, User, BlockedNumber, LotteryType, BetType } from '@shared/schema';
-import { payoutRates } from '@shared/schema';
+import type {
+  CartItem,
+  User,
+  LotteryType,
+  BetType,
+} from '@shared/schema';
+
+/* =========================
+   CART
+========================= */
+
+/**
+ * Frontend cart items include `potentialWin`,
+ * even though backend CartItem type does not.
+ * This is a TYPE EXTENSION ONLY — no behavior change.
+ */
+type CartItemWithWin = CartItem & {
+  potentialWin: number;
+};
 
 interface CartState {
-  items: CartItem[];
-  addItem: (item: Omit<CartItem, 'id'>) => void;
+  items: CartItemWithWin[];
+  addItem: (item: Omit<CartItemWithWin, 'id'>) => void;
   removeItem: (id: string) => void;
   clearCart: () => void;
   getTotal: () => number;
@@ -16,33 +33,44 @@ export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+
       addItem: (item) => {
-        const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const id = `${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
         set((state) => ({
-          items: [...state.items, { ...item, id }]
+          items: [...state.items, { ...item, id }],
         }));
       },
+
       removeItem: (id) => {
         set((state) => ({
-          items: state.items.filter((item) => item.id !== id)
+          items: state.items.filter((item) => item.id !== id),
         }));
       },
+
       clearCart: () => set({ items: [] }),
+
       getTotal: () => {
         return get().items.reduce((sum, item) => sum + item.amount, 0);
       },
+
       getTotalPotentialWin: () => {
-        return get().items.reduce((sum, item) => {
-          const rate = payoutRates[item.betType];
-          return sum + (item.amount * rate);
-        }, 0);
-      }
+        return get().items.reduce(
+          (sum, item) => sum + item.potentialWin,
+          0
+        );
+      },
     }),
     {
-      name: 'qnq-cart'
+      name: 'qnq-cart',
     }
   )
 );
+
+/* =========================
+   USER
+========================= */
 
 interface UserState {
   user: User | null;
@@ -57,17 +85,27 @@ export const useUser = create<UserState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
+
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      updateBalance: (newBalance) => set((state) => ({
-        user: state.user ? { ...state.user, balance: newBalance } : null
-      })),
-      logout: () => set({ user: null, isAuthenticated: false })
+
+      updateBalance: (newBalance) =>
+        set((state) => ({
+          user: state.user
+            ? { ...state.user, balance: newBalance }
+            : null,
+        })),
+
+      logout: () => set({ user: null, isAuthenticated: false }),
     }),
     {
-      name: 'qnq-user'
+      name: 'qnq-user',
     }
   )
 );
+
+/* =========================
+   ADMIN
+========================= */
 
 interface AdminState {
   isAdminAuthenticated: boolean;
@@ -80,10 +118,15 @@ export const useAdmin = create<AdminState>()(
   persist(
     (set) => ({
       isAdminAuthenticated: false,
-      setAdminAuthenticated: (value) => set({ isAdminAuthenticated: value }),
+
+      setAdminAuthenticated: (value) =>
+        set({ isAdminAuthenticated: value }),
+
       checkAdminStatus: async () => {
         try {
-          const res = await fetch('/api/admin/check', { credentials: 'include' });
+          const res = await fetch('/api/admin/check', {
+            credentials: 'include',
+          });
           const data = await res.json();
           set({ isAdminAuthenticated: data.isAdmin === true });
           return data.isAdmin === true;
@@ -92,29 +135,53 @@ export const useAdmin = create<AdminState>()(
           return false;
         }
       },
+
       logout: async () => {
         try {
-          await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
-        } catch {
-        }
+          await fetch('/api/admin/logout', {
+            method: 'POST',
+            credentials: 'include',
+          });
+        } catch {}
         set({ isAdminAuthenticated: false });
-      }
+      },
     }),
     {
-      name: 'qnq-admin'
+      name: 'qnq-admin',
     }
   )
 );
 
+/* =========================
+   BLOCKED NUMBERS
+========================= */
+
+/**
+ * DTO shape returned by API
+ * (not a Drizzle table type)
+ */
+interface BlockedNumberDTO {
+  lotteryType: LotteryType;
+  number: string;
+  betType: BetType | null;
+  isActive: boolean;
+}
+
 interface BlockedNumbersState {
-  blockedNumbers: BlockedNumber[];
-  setBlockedNumbers: (numbers: BlockedNumber[]) => void;
-  isBlocked: (lotteryType: LotteryType, number: string, betType?: BetType) => boolean;
+  blockedNumbers: BlockedNumberDTO[];
+  setBlockedNumbers: (numbers: BlockedNumberDTO[]) => void;
+  isBlocked: (
+    lotteryType: LotteryType,
+    number: string,
+    betType?: BetType
+  ) => boolean;
 }
 
 export const useBlockedNumbers = create<BlockedNumbersState>((set, get) => ({
   blockedNumbers: [],
+
   setBlockedNumbers: (numbers) => set({ blockedNumbers: numbers }),
+
   isBlocked: (lotteryType, number, betType) => {
     const { blockedNumbers } = get();
     return blockedNumbers.some(
@@ -124,5 +191,5 @@ export const useBlockedNumbers = create<BlockedNumbersState>((set, get) => ({
         bn.number === number &&
         (bn.betType === null || bn.betType === betType)
     );
-  }
+  },
 }));

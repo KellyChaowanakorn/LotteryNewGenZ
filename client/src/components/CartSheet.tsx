@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCart, useUser } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
-import { lotteryTypeNames, betTypeNames, payoutRates } from "@shared/schema";
+import { lotteryTypeNames, betTypeNames, payoutRates, LotteryType, BetType } from "@shared/schema";
 import { ShoppingCart, Trash2, X, Wallet, CreditCard, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -134,10 +134,10 @@ export function CartSheet() {
                         <div className="space-y-1 pr-6">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
-                              {lotteryTypeNames[item.lotteryType][language]}
+                              {lotteryTypeNames[item.lotteryType as LotteryType][language]}
                             </Badge>
                             <Badge variant="outline" className="text-xs">
-                              {betTypeNames[item.betType][language]}
+                              {betTypeNames[item.betType as BetType][language]}
                             </Badge>
                           </div>
                           <div className="flex items-center justify-between mt-2">
@@ -149,7 +149,7 @@ export function CartSheet() {
                                 {item.amount.toLocaleString()} {t("common.baht")}
                               </p>
                               <p className="text-xs text-primary">
-                                {language === "th" ? "ชนะ" : "Win"}: {(item.amount * payoutRates[item.betType]).toLocaleString()}
+                                {language === "th" ? "ชนะ" : "Win"}: {(item.amount * payoutRates[item.betType as BetType]).toLocaleString()}
                               </p>
                             </div>
                           </div>

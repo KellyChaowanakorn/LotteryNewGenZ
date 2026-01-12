@@ -28,7 +28,7 @@ export function BlockedNumbersDisplay({ lotteryType }: BlockedNumbersDisplayProp
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2 text-destructive">
           <Ban className="h-4 w-4" />
-          {t("home.blockedNumbers")}
+          {String(t("home.blockedNumbers"))}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -36,14 +36,22 @@ export function BlockedNumbersDisplay({ lotteryType }: BlockedNumbersDisplayProp
           <div className="flex flex-wrap gap-1.5">
             {filteredNumbers.map((bn) => (
               <Badge
-                key={bn.id}
+                key={bn.number}
                 variant="destructive"
                 className="text-xs font-mono"
               >
                 {bn.number}
                 {bn.betType && (
                   <span className="ml-1 opacity-70">
-                    ({betTypeNames[bn.betType][language]})
+                    (
+                    {String(
+                      betTypeNames[
+                        bn.betType as keyof typeof betTypeNames
+                      ][
+                        language as keyof (typeof betTypeNames)[keyof typeof betTypeNames]
+                      ]
+                    )}
+                    )
                   </span>
                 )}
               </Badge>

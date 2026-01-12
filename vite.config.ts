@@ -32,6 +32,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    port: 5173,
+    proxy: {
+      // เพิ่มตรงนี้ 5 บรรทัดเท่านั้น!!! ทุก /api จะวิ่งไปหา backend ที่ port 3000
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

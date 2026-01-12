@@ -75,7 +75,7 @@ export default function AdminLogin() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder="QNQgod1688"
                   className="pl-10"
                   required
                   data-testid="input-admin-username"
@@ -108,11 +108,7 @@ export default function AdminLogin() {
             </Button>
           </form>
 
-          <div className="mt-4 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-            <p className="font-medium mb-1">{language === "th" ? "สำหรับทดสอบ:" : "For testing:"}</p>
-            <p>Username: admin</p>
-            <p>Password: admin123</p>
-          </div>
+         
         </CardContent>
       </Card>
     </div>
