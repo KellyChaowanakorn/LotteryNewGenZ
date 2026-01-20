@@ -24,31 +24,34 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (username && password.length >= 4) {
-      setUser({
-        id: Date.now().toString(),
-        username,
-        password: "",
-        balance: 10000,
-        referralCode: `QNQ${Date.now().toString(36).toUpperCase()}`,
-        referredBy: null,
-        affiliateEarnings: 0,
-        createdAt: new Date().toISOString()
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        credentials: "include",
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      setUser(data.user);
       toast({
         title: language === "th" ? "เข้าสู่ระบบสำเร็จ" : "Login successful"
       });
       setLocation("/");
-    } else {
+    } catch (error: any) {
       toast({
-        title: language === "th" ? "ข้อมูลไม่ถูกต้อง" : "Invalid credentials",
+        title: language === "th" ? "เข้าสู่ระบบไม่สำเร็จ" : "Login failed",
+        description: error.message,
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (

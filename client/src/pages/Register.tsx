@@ -51,26 +51,46 @@ export default function Register() {
     }
 
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    setUser({
-      id: Date.now().toString(),
-      username,
-      password: "",
-      balance: 0,
-      referralCode: `QNQ${Date.now().toString(36).toUpperCase()}`,
-      referredBy: referralCode || null,
-      affiliateEarnings: 0,
-      createdAt: new Date().toISOString()
-    });
+    try {
+      // Generate unique referral code for this user
+      const newReferralCode = `QNQ${Date.now().toString(36).toUpperCase()}`;
 
-    toast({
-      title: language === "th" ? "สมัครสมาชิกสำเร็จ" : "Registration successful",
-      description: language === "th" ? "ยินดีต้อนรับสู่ QNQ Lottery!" : "Welcome to QNQ Lottery!"
-    });
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password,
+          referralCode: newReferralCode,
+          referredBy: referralCode || null,
+        }),
+        credentials: "include",
+      });
 
-    setLocation("/");
-    setIsLoading(false);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      setUser(data.user);
+
+      toast({
+        title: language === "th" ? "สมัครสมาชิกสำเร็จ" : "Registration successful",
+        description: language === "th" ? "ยินดีต้อนรับสู่ QNQ Lottery!" : "Welcome to QNQ Lottery!"
+      });
+
+      setLocation("/");
+    } catch (error: any) {
+      toast({
+        title: language === "th" ? "สมัครไม่สำเร็จ" : "Registration failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

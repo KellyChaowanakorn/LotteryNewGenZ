@@ -104,6 +104,15 @@ export function registerRoutes(app: Express): Server {
       }
 
       // แปลงเป็นรูปแบบที่ frontend ต้องการ
+      // Parse threeDigitTop ถ้ามีหลายเลข (เช่น "701, 884")
+      const threeTopNumbers = result.threeDigitTop 
+        ? result.threeDigitTop.split(",").map(n => n.trim()).filter(n => n)
+        : [];
+      
+      const threeBottomNumbers = result.threeDigitBottom 
+        ? result.threeDigitBottom.split(",").map(n => n.trim()).filter(n => n)
+        : [];
+
       res.json({
         status: result.error ? "error" : "success",
         response: {
@@ -113,18 +122,27 @@ export function registerRoutes(app: Express): Server {
             {
               id: "prizeFirst",
               name: "รางวัลที่ 1",
+              reward: "6000000",
               number: result.firstPrize ? [result.firstPrize] : [],
             },
           ],
           runningNumbers: [
             {
               id: "runningNumberFrontThree",
-              name: "3 ตัวหน้า",
-              number: result.threeDigitTop ? [result.threeDigitTop] : [],
+              name: "รางวัลเลขหน้า 3 ตัว",
+              reward: "4000",
+              number: threeTopNumbers,
+            },
+            {
+              id: "runningNumberBackThree",
+              name: "รางวัลเลขท้าย 3 ตัว",
+              reward: "4000",
+              number: threeBottomNumbers,
             },
             {
               id: "runningNumberBackTwo",
-              name: "2 ตัวท้าย",
+              name: "รางวัลเลขท้าย 2 ตัว",
+              reward: "2000",
               number: result.twoDigitBottom ? [result.twoDigitBottom] : [],
             },
           ],
@@ -134,6 +152,7 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       console.error("Error fetching Thai Gov lottery:", error);
       res.status(500).json({
+        status: "error",
         error: "Failed to fetch Thai Government lottery",
         details: error.message,
       });
@@ -374,10 +393,10 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // หักยอดเงิน (ต้องเพิ่ม function updateUserBalance ใน storage)
-      // await storage.updateUserBalance(userId, user.balance - total);
+      // หักยอดเงิน
+      await storage.updateUserBalance(userId, user.balance - total);
 
-      res.json({ success: true });
+      res.json({ success: true, newBalance: user.balance - total });
     } catch (error: any) {
       console.error("Error creating bets:", error);
       res.status(500).json({ error: error.message });
@@ -395,8 +414,25 @@ export function registerRoutes(app: Express): Server {
   ========================= */
 
   app.post("/api/transactions", async (req: Request, res: Response) => {
-    await storage.createTransaction(req.body);
-    res.json({ success: true });
+    try {
+      const { userId, type, amount, slipUrl } = req.body;
+      
+      // Generate reference number
+      const reference = `TXN${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      
+      await storage.createTransaction({
+        userId,
+        type,
+        amount,
+        reference,
+        slipUrl: slipUrl || null,
+      });
+      
+      res.json({ success: true, reference });
+    } catch (error: any) {
+      console.error("Error creating transaction:", error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get("/api/transactions/:userId", async (req: Request, res: Response) => {

@@ -51,6 +51,11 @@ export const betTypes = [
   "RUN_TOP",
   "RUN_BOTTOM",
   "REVERSE",
+  // Stock lottery specific types
+  "THREE_STRAIGHT",  // 3 ตัวตรง (= 3 ตัวท้าย)
+  "TWO_STRAIGHT",    // 2 ตัวตรง (= 2 ตัวท้าย)
+  "THREE_REVERSE",   // 3 ตัวกลับ
+  "TWO_REVERSE",     // 2 ตัวกลับ
 ] as const;
 
 export type BetType = (typeof betTypes)[number];
@@ -69,6 +74,11 @@ export const betTypeNames: Record<BetType, { th: string; en: string }> = {
   RUN_TOP: { th: "วิ่งบน", en: "Run Top" },
   RUN_BOTTOM: { th: "วิ่งล่าง", en: "Run Bottom" },
   REVERSE: { th: "กลับ", en: "Reverse" },
+  // Stock lottery specific
+  THREE_STRAIGHT: { th: "3 ตัวตรง", en: "3D Straight" },
+  TWO_STRAIGHT: { th: "2 ตัวตรง", en: "2D Straight" },
+  THREE_REVERSE: { th: "3 ตัวกลับ", en: "3D Reverse" },
+  TWO_REVERSE: { th: "2 ตัวกลับ", en: "2D Reverse" },
 };
 
 /* =========================
@@ -85,6 +95,170 @@ export const payoutRates: Record<BetType, number> = {
   RUN_TOP: 3,
   RUN_BOTTOM: 3,
   REVERSE: 50,
+  // Stock lottery specific - Admin can adjust these
+  THREE_STRAIGHT: 900,
+  TWO_STRAIGHT: 90,
+  THREE_REVERSE: 450,
+  TWO_REVERSE: 45,
+};
+
+/* =========================
+   ALLOWED BET TYPES PER LOTTERY
+========================= */
+
+export const allowedBetTypes: Record<LotteryType, BetType[]> = {
+  // หวยรัฐบาลไทย - ครบทุกประเภท
+  THAI_GOV: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "FOUR_TOP", "FIVE_TOP", "RUN_TOP", "RUN_BOTTOM", "REVERSE"],
+  
+  // หุ้นไทย (SET) - เฉพาะ 5 ประเภท
+  THAI_STOCK: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
+  
+  // หุ้นต่างประเทศ - เหมือนหุ้นไทย
+  STOCK_NIKKEI: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
+  STOCK_DOW: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
+  STOCK_FTSE: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
+  STOCK_DAX: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
+  
+  // หวยต่างประเทศ
+  LAO: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "RUN_TOP", "RUN_BOTTOM", "REVERSE"],
+  HANOI: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "RUN_TOP", "RUN_BOTTOM", "REVERSE"],
+  MALAYSIA: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "FOUR_TOP", "REVERSE"],
+  SINGAPORE: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "FOUR_TOP", "REVERSE"],
+  
+  // Keno
+  KENO: ["TWO_TOP", "THREE_TOP", "FOUR_TOP", "FIVE_TOP"],
+};
+
+/* =========================
+   WIN CONDITION RULES
+   กฎการตรวจสอบการถูกรางวัล
+========================= */
+
+export interface WinCondition {
+  description: { th: string; en: string };
+  checkWin: (betNumber: string, resultNumber: string) => boolean;
+  digitCount: number;
+}
+
+// Helper function: สลับเลขทุกตำแหน่ง (permutations)
+function getPermutations(str: string): string[] {
+  if (str.length <= 1) return [str];
+  const result: string[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const remaining = str.slice(0, i) + str.slice(i + 1);
+    for (const perm of getPermutations(remaining)) {
+      result.push(char + perm);
+    }
+  }
+  return [...new Set(result)];
+}
+
+export const winConditions: Record<BetType, WinCondition> = {
+  // 2 ตัวบน - ตรงกับ 2 ตัวบน
+  TWO_TOP: {
+    description: { th: "2 ตัวบน ตรงกับผลรางวัล 2 ตัวบน", en: "Match top 2 digits" },
+    checkWin: (bet, result) => bet === result.slice(0, 2),
+    digitCount: 2,
+  },
+  
+  // 2 ตัวล่าง - ตรงกับ 2 ตัวล่าง
+  TWO_BOTTOM: {
+    description: { th: "2 ตัวล่าง ตรงกับผลรางวัล 2 ตัวล่าง", en: "Match bottom 2 digits" },
+    checkWin: (bet, result) => bet === result.slice(-2),
+    digitCount: 2,
+  },
+  
+  // 3 ตัวบน - ตรงกับ 3 ตัวบน
+  THREE_TOP: {
+    description: { th: "3 ตัวบน ตรงกับผลรางวัล 3 ตัวบน", en: "Match top 3 digits" },
+    checkWin: (bet, result) => bet === result.slice(0, 3),
+    digitCount: 3,
+  },
+  
+  // 3 ตัวโต๊ด - สลับตำแหน่งได้
+  THREE_TOD: {
+    description: { th: "3 ตัวโต๊ด ตรงกับผลรางวัลโดยสลับตำแหน่งได้", en: "Match 3 digits in any order" },
+    checkWin: (bet, result) => {
+      const resultDigits = result.slice(-3);
+      return getPermutations(bet).includes(resultDigits);
+    },
+    digitCount: 3,
+  },
+  
+  // 4 ตัว
+  FOUR_TOP: {
+    description: { th: "4 ตัว ตรงกับผลรางวัล 4 ตัว", en: "Match 4 digits exactly" },
+    checkWin: (bet, result) => bet === result.slice(-4),
+    digitCount: 4,
+  },
+  
+  // 5 ตัว
+  FIVE_TOP: {
+    description: { th: "5 ตัว ตรงกับผลรางวัล 5 ตัว", en: "Match 5 digits exactly" },
+    checkWin: (bet, result) => bet === result.slice(-5),
+    digitCount: 5,
+  },
+  
+  // วิ่งบน - เลขเดียวอยู่ในผล 3 ตัวบน
+  RUN_TOP: {
+    description: { th: "วิ่งบน เลขอยู่ในผล 3 ตัวบน", en: "Single digit in top 3" },
+    checkWin: (bet, result) => result.slice(0, 3).includes(bet),
+    digitCount: 1,
+  },
+  
+  // วิ่งล่าง - เลขเดียวอยู่ในผล 2 ตัวล่าง
+  RUN_BOTTOM: {
+    description: { th: "วิ่งล่าง เลขอยู่ในผล 2 ตัวล่าง", en: "Single digit in bottom 2" },
+    checkWin: (bet, result) => result.slice(-2).includes(bet),
+    digitCount: 1,
+  },
+  
+  // กลับ (2 ตัว) - เลขกลับกัน
+  REVERSE: {
+    description: { th: "กลับ 2 ตัว", en: "Reverse 2 digits" },
+    checkWin: (bet, result) => {
+      const reversed = bet.split("").reverse().join("");
+      return reversed === result.slice(-2);
+    },
+    digitCount: 2,
+  },
+  
+  // === STOCK LOTTERY TYPES ===
+  
+  // 3 ตัวตรง (หุ้น) - ตรงกับ 3 ตัวท้ายของดัชนี
+  THREE_STRAIGHT: {
+    description: { th: "3 ตัวตรง ตรงกับ 3 ตัวท้ายของดัชนีหุ้น", en: "Match last 3 digits of stock index" },
+    checkWin: (bet, result) => bet === result.slice(-3),
+    digitCount: 3,
+  },
+  
+  // 2 ตัวตรง (หุ้น) - ตรงกับ 2 ตัวท้ายของดัชนี
+  TWO_STRAIGHT: {
+    description: { th: "2 ตัวตรง ตรงกับ 2 ตัวท้ายของดัชนีหุ้น", en: "Match last 2 digits of stock index" },
+    checkWin: (bet, result) => bet === result.slice(-2),
+    digitCount: 2,
+  },
+  
+  // 3 ตัวกลับ (หุ้น) - กลับเลข 3 ตัว
+  THREE_REVERSE: {
+    description: { th: "3 ตัวกลับ เลขกลับกัน 3 ตัว", en: "Reverse 3 digits" },
+    checkWin: (bet, result) => {
+      const reversed = bet.split("").reverse().join("");
+      return reversed === result.slice(-3);
+    },
+    digitCount: 3,
+  },
+  
+  // 2 ตัวกลับ (หุ้น) - กลับเลข 2 ตัว
+  TWO_REVERSE: {
+    description: { th: "2 ตัวกลับ เลขกลับกัน 2 ตัว", en: "Reverse 2 digits" },
+    checkWin: (bet, result) => {
+      const reversed = bet.split("").reverse().join("");
+      return reversed === result.slice(-2);
+    },
+    digitCount: 2,
+  },
 };
 
 /* =========================
@@ -275,3 +449,24 @@ export const cartItemSchema = z.object({
 });
 
 export type CartItem = z.infer<typeof cartItemSchema>;
+
+/* =========================
+   INFERRED TYPES (FOR FRONTEND)
+========================= */
+
+export type Transaction = typeof transactions.$inferSelect;
+export type BlockedNumber = typeof blockedNumbers.$inferSelect;
+export type LotteryResult = typeof lotteryResults.$inferSelect;
+export type PayoutSetting = typeof payoutSettings.$inferSelect;
+export type BetTypeSetting = typeof betTypeSettings.$inferSelect;
+export type Affiliate = typeof affiliates.$inferSelect;
+
+// Custom type for bet limits with lottery types array
+export type BetLimitWithLotteryTypes = {
+  id: number;
+  number: string;
+  maxAmount: number;
+  lotteryTypes: string[];
+  isActive: boolean;
+  createdAt: number;
+};

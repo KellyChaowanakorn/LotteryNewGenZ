@@ -29,6 +29,13 @@ export async function getUserById(id: number) {
   return result[0] ?? null;
 }
 
+export async function updateUserBalance(userId: number, newBalance: number) {
+  await db
+    .update(users)
+    .set({ balance: newBalance })
+    .where(eq(users.id, userId));
+}
+
 export async function createUser(data: {
   username: string;
   password: string;
@@ -244,6 +251,7 @@ export const storage = {
   getUserByUsername,
   getUserById,
   createUser,
+  updateUserBalance,
 
   // bets
   createBet,

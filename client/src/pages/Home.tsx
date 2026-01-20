@@ -221,6 +221,7 @@ export default function Home() {
                         setSelectedBetType(type);
                         setNumbers([]);
                       }}
+                      lotteryType={selectedLottery}
                     />
                     {selectedBetType && (
                       <Button 

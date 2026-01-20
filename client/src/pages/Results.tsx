@@ -54,23 +54,28 @@ interface StockResult {
   threeDigit: string;
   marketState: string;
   source: string;
+  error?: string;
 }
 
 interface ThaiGovResult {
   status: string;
   response: {
     date: string;
+    endpoint?: string;
     prizes: Array<{
       id: string;
       name: string;
+      reward?: string;
       number: string[];
     }>;
     runningNumbers: Array<{
       id: string;
       name: string;
+      reward?: string;
       number: string[];
     }>;
   };
+  error?: string;
 }
 
 // ------------------ CONSTANTS ------------------
@@ -113,20 +118,33 @@ const categoryNames: Record<string, Record<Language, string>> = {
 // ------------------ COMPONENTS ------------------
 
 function ThaiGovCard({ language }: { language: Language }) {
+  const [isRefetching, setIsRefetching] = useState(false);
   const { data, isLoading, error, refetch } = useQuery<ThaiGovResult>({
     queryKey: ["/api/results/live/thai-gov"],
     refetchInterval: 60000, // refresh every 1 minute
+    staleTime: 30000,
   });
+
+  const handleRefetch = async () => {
+    setIsRefetching(true);
+    await refetch();
+    setIsRefetching(false);
+  };
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="md:col-span-2">
         <CardHeader>
           <Skeleton className="h-6 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full mb-4" />
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
         </CardContent>
       </Card>
     );
@@ -134,17 +152,24 @@ function ThaiGovCard({ language }: { language: Language }) {
 
   if (error || !data || data.status !== "success") {
     return (
-      <Card>
+      <Card className="md:col-span-2">
         <CardHeader>
-          <CardTitle>{lotteryTypeNames.THAI_GOV[language]}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            {lotteryTypeNames.THAI_GOV[language]}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              {language === "th" ? "ไม่สามารถโหลดข้อมูลได้" : "Failed to load data"}
+              {language === "th" ? "ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่" : "Failed to load data. Please try again."}
             </AlertDescription>
           </Alert>
+          <Button variant="outline" className="w-full" onClick={handleRefetch}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+            {language === "th" ? "ลองใหม่" : "Try Again"}
+          </Button>
         </CardContent>
       </Card>
     );
@@ -152,65 +177,119 @@ function ThaiGovCard({ language }: { language: Language }) {
 
   const firstPrize = data.response.prizes.find((p) => p.id === "prizeFirst")?.number[0];
   const threeTop = data.response.runningNumbers.find((r) => r.id === "runningNumberFrontThree")?.number || [];
+  const threeBottom = data.response.runningNumbers.find((r) => r.id === "runningNumberBackThree")?.number || [];
   const twoBottom = data.response.runningNumbers.find((r) => r.id === "runningNumberBackTwo")?.number[0];
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="md:col-span-2 hover:shadow-lg transition-shadow border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
+            <Trophy className="h-6 w-6 text-yellow-500" />
             {lotteryTypeNames.THAI_GOV[language]}
           </span>
-          <Badge variant="outline" className="gap-1">
-            <Wifi className="h-3 w-3 text-green-500" />
-            {language === "th" ? "สด" : "Live"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+              <Wifi className="h-3 w-3" />
+              {language === "th" ? "สด" : "Live"}
+            </Badge>
+          </div>
         </CardTitle>
-        <CardDescription className="flex items-center gap-1">
+        <CardDescription className="flex items-center gap-2">
           <Clock className="h-3 w-3" />
           {data.response.date}
+          <span className="text-xs text-muted-foreground">• {data.response.endpoint}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950 dark:to-orange-950 rounded-lg">
-          <p className="text-sm text-muted-foreground mb-2">
+        {/* รางวัลที่ 1 */}
+        <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/50 dark:to-orange-950/50 rounded-xl border border-yellow-200 dark:border-yellow-900">
+          <p className="text-sm text-muted-foreground mb-2 flex items-center justify-center gap-2">
+            <Trophy className="h-4 w-4 text-yellow-500" />
             {language === "th" ? "รางวัลที่ 1" : "First Prize"}
           </p>
-          <p className="text-4xl font-bold tracking-wider font-mono">
-            {firstPrize || "---"}
+          <p className="text-5xl md:text-6xl font-bold tracking-wider font-mono text-yellow-600 dark:text-yellow-400">
+            {firstPrize || "------"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {language === "th" ? "รางวัล 6,000,000 บาท" : "Prize: 6,000,000 THB"}
           </p>
         </div>
         
+        {/* เลขท้าย 2 ตัว */}
+        <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 rounded-xl border border-blue-200 dark:border-blue-900">
+          <p className="text-sm text-muted-foreground mb-2">
+            {language === "th" ? "รางวัลเลขท้าย 2 ตัว" : "Last 2 Digits"}
+          </p>
+          <p className="text-4xl font-bold font-mono text-blue-600 dark:text-blue-400">
+            {twoBottom || "--"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {language === "th" ? "รางวัล 2,000 บาท" : "Prize: 2,000 THB"}
+          </p>
+        </div>
+
+        {/* เลข 3 ตัว */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <p className="text-xs text-muted-foreground mb-1">
-              {language === "th" ? "3 ตัวบน" : "3D Top"}
+          <div className="text-center p-4 bg-muted rounded-xl">
+            <p className="text-xs text-muted-foreground mb-2">
+              {language === "th" ? "รางวัลเลขหน้า 3 ตัว" : "First 3 Digits"}
             </p>
-            <div className="flex flex-wrap gap-1 justify-center">
-              {threeTop.slice(0, 2).map((num, i) => (
-                <span key={i} className="text-sm font-bold font-mono">{num}</span>
-              ))}
+            <div className="flex flex-wrap gap-2 justify-center">
+              {threeTop.length > 0 ? (
+                threeTop.map((num, i) => (
+                  <span key={i} className="text-xl font-bold font-mono bg-primary/10 px-3 py-1 rounded-lg">
+                    {num}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xl font-bold font-mono">---</span>
+              )}
             </div>
-          </div>
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <p className="text-xs text-muted-foreground mb-1">
-              {language === "th" ? "2 ตัวล่าง" : "2D Bottom"}
+            <p className="text-xs text-muted-foreground mt-1">
+              {language === "th" ? "รางวัล 4,000 บาท" : "Prize: 4,000 THB"}
             </p>
-            <p className="text-lg font-bold font-mono">{twoBottom || "--"}</p>
+          </div>
+          <div className="text-center p-4 bg-muted rounded-xl">
+            <p className="text-xs text-muted-foreground mb-2">
+              {language === "th" ? "รางวัลเลขท้าย 3 ตัว" : "Last 3 Digits"}
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {threeBottom.length > 0 ? (
+                threeBottom.map((num, i) => (
+                  <span key={i} className="text-xl font-bold font-mono bg-primary/10 px-3 py-1 rounded-lg">
+                    {num}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xl font-bold font-mono">---</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {language === "th" ? "รางวัล 4,000 บาท" : "Prize: 4,000 THB"}
+            </p>
           </div>
         </div>
 
-        <Button variant="outline" className="w-full" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          {language === "th" ? "รีเฟรช" : "Refresh"}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" onClick={handleRefetch} disabled={isRefetching}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+            {language === "th" ? "รีเฟรช" : "Refresh"}
+          </Button>
+          <Button variant="outline" className="flex-1" asChild>
+            <a href="https://www.glo.or.th/" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {language === "th" ? "GLO" : "GLO"}
+            </a>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
 }
 
 function StockCard({ lotteryType, language }: { lotteryType: LotteryType; language: Language }) {
+  const [isRefetching, setIsRefetching] = useState(false);
   const stockSymbolMap: Record<string, string> = {
     STOCK_NIKKEI: "NIKKEI",
     STOCK_DOW: "DOW",
@@ -224,8 +303,14 @@ function StockCard({ lotteryType, language }: { lotteryType: LotteryType; langua
 
   const { data, isLoading, error, refetch } = useQuery<StockResult>({
     queryKey: [apiUrl],
-    refetchInterval: 30000, // refresh every 30 seconds
+    refetchInterval: lotteryType === "THAI_STOCK" ? 15000 : 30000, // Thai stock refresh faster
   });
+
+  const handleRefetch = async () => {
+    setIsRefetching(true);
+    await refetch();
+    setIsRefetching(false);
+  };
 
   if (isLoading) {
     return (
@@ -259,7 +344,109 @@ function StockCard({ lotteryType, language }: { lotteryType: LotteryType; langua
   }
 
   const isPositive = data.change >= 0;
+  const isThaiStock = lotteryType === "THAI_STOCK";
+  const isMarketOpen = data.marketState === "OPEN" || data.marketState === "REGULAR";
 
+  // For Thai Stock, show enhanced card
+  if (isThaiStock) {
+    return (
+      <Card className="hover:shadow-lg transition-shadow border-blue-200 dark:border-blue-800">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <TrendingUpIcon className="h-5 w-5 text-blue-500" />
+              {language === "th" ? "หุ้นไทย (SET Index)" : "Thai Stock (SET Index)"}
+            </span>
+            <Badge 
+              variant={isMarketOpen ? "default" : "secondary"}
+              className={isMarketOpen ? "bg-green-500" : ""}
+            >
+              {isMarketOpen 
+                ? (language === "th" ? "ตลาดเปิด" : "OPEN") 
+                : (language === "th" ? "ตลาดปิด" : "CLOSED")
+              }
+            </Badge>
+          </CardTitle>
+          <CardDescription className="flex items-center gap-2">
+            <Clock className="h-3 w-3" />
+            {data.date}
+            <span className="text-xs">• {data.source}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Price Display */}
+          <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 rounded-xl border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">SET Index</p>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  {data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className={`flex items-center gap-1 ${isPositive ? "text-green-600" : "text-red-600"}`}>
+                  {isPositive ? <TrendingUpIcon className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                  <span className="font-bold text-lg">{data.changePercent.toFixed(2)}%</span>
+                </div>
+                <p className="text-sm">{isPositive ? "+" : ""}{data.change.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Lottery Numbers - Large Display */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/50 dark:to-green-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800">
+              <p className="text-xs text-muted-foreground mb-2">
+                {language === "th" ? "3 ตัวตรง" : "3D Straight"}
+              </p>
+              <p className="text-4xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                {data.threeDigit}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {language === "th" ? "จ่าย x900" : "Payout x900"}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/50 dark:to-amber-950/50 rounded-xl border border-orange-200 dark:border-orange-800">
+              <p className="text-xs text-muted-foreground mb-2">
+                {language === "th" ? "2 ตัวตรง" : "2D Straight"}
+              </p>
+              <p className="text-4xl font-bold font-mono text-orange-600 dark:text-orange-400">
+                {data.twoDigit}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {language === "th" ? "จ่าย x90" : "Payout x90"}
+              </p>
+            </div>
+          </div>
+
+          {/* Info about calculation */}
+          <div className="p-3 bg-muted rounded-lg">
+            <p className="text-xs text-muted-foreground">
+              💡 {language === "th" 
+                ? `คำนวณจาก SET ${data.price.toFixed(2)} → ตัดจุดทศนิยม = ${data.price.toFixed(2).replace(".", "")} → 3 ตัวท้าย = ${data.threeDigit}, 2 ตัวท้าย = ${data.twoDigit}`
+                : `Calculated from SET ${data.price.toFixed(2)} → Remove decimal = ${data.price.toFixed(2).replace(".", "")} → Last 3 = ${data.threeDigit}, Last 2 = ${data.twoDigit}`
+              }
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={handleRefetch} disabled={isRefetching}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+              {language === "th" ? "รีเฟรช" : "Refresh"}
+            </Button>
+            <Button variant="outline" className="flex-1" asChild>
+              <a href="https://www.set.or.th/th/market/index/set/overview" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                SET
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // For international stocks
   return (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader>
@@ -268,7 +455,7 @@ function StockCard({ lotteryType, language }: { lotteryType: LotteryType; langua
             <TrendingUpIcon className="h-5 w-5 text-blue-500" />
             {lotteryTypeNames[lotteryType][language]}
           </span>
-          <Badge variant={data.marketState === "REGULAR" ? "default" : "secondary"}>
+          <Badge variant={isMarketOpen ? "default" : "secondary"}>
             {data.marketState}
           </Badge>
         </CardTitle>
@@ -304,8 +491,8 @@ function StockCard({ lotteryType, language }: { lotteryType: LotteryType; langua
           </div>
         </div>
 
-        <Button variant="outline" className="w-full" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button variant="outline" className="w-full" onClick={handleRefetch} disabled={isRefetching}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
           {language === "th" ? "รีเฟรช" : "Refresh"}
         </Button>
       </CardContent>
@@ -453,6 +640,8 @@ export default function Results() {
         <TabsContent value="thai" className="space-y-4 mt-6">
           <div className="grid gap-4 md:grid-cols-2">
             <ThaiGovCard language={language} />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
             <StockCard lotteryType="THAI_STOCK" language={language} />
           </div>
         </TabsContent>
