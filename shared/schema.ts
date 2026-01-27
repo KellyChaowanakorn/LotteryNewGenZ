@@ -46,7 +46,7 @@ export const lotteryDrawTimes: Record<LotteryType, { th: string; en: string }> =
 };
 
 /* =========================
-   BET TYPES
+   BET TYPES (รวม PermutationCalculator)
 ========================= */
 
 export const betTypes = [
@@ -65,6 +65,10 @@ export const betTypes = [
   // มาเลย์
   "FOUR_STRAIGHT",
   "FOUR_TOD",
+  // Permutation Calculator (เพิ่มเติม)
+  "FOUR_TOP",
+  "FIVE_TOP",
+  "REVERSE",
 ] as const;
 
 export type BetType = (typeof betTypes)[number];
@@ -86,6 +90,10 @@ export const betTypeNames: Record<BetType, { th: string; en: string }> = {
   TWO_REVERSE: { th: "2 ตัวกลับ", en: "2D Reverse" },
   FOUR_STRAIGHT: { th: "4 ตัวตรง", en: "4D Straight" },
   FOUR_TOD: { th: "4 ตัวโต๊ด", en: "4D Tod" },
+  // Permutation Calculator
+  FOUR_TOP: { th: "4 ตัวบน", en: "4D Top" },
+  FIVE_TOP: { th: "5 ตัวบน", en: "5D Top" },
+  REVERSE: { th: "กลับ", en: "Reverse" },
 };
 
 /* =========================
@@ -105,6 +113,10 @@ export const payoutRates: Record<BetType, number> = {
   TWO_REVERSE: 45,
   FOUR_STRAIGHT: 6000,
   FOUR_TOD: 250,
+  // Permutation Calculator
+  FOUR_TOP: 6000,
+  FIVE_TOP: 60000,
+  REVERSE: 90,
 };
 
 /* =========================
@@ -112,7 +124,7 @@ export const payoutRates: Record<BetType, number> = {
 ========================= */
 
 export const allowedBetTypes: Record<LotteryType, BetType[]> = {
-  THAI_GOV: ["THREE_TOP", "THREE_TOD", "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM"],
+  THAI_GOV: ["THREE_TOP", "THREE_TOD", "TWO_TOP", "TWO_BOTTOM", "RUN_TOP", "RUN_BOTTOM", "FOUR_TOP", "FIVE_TOP", "REVERSE"],
   THAI_STOCK: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD", "THREE_REVERSE", "TWO_REVERSE"],
   STOCK_NIKKEI: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD"],
   STOCK_HSI: ["THREE_STRAIGHT", "TWO_STRAIGHT", "THREE_TOD"],
@@ -130,6 +142,7 @@ export interface WinCondition {
   digitCount: number;
 }
 
+// FIX: Use Array.from() instead of spread operator for Set iteration
 function getPermutations(str: string): string[] {
   if (str.length <= 1) return [str];
   const result: string[] = [];
@@ -140,7 +153,7 @@ function getPermutations(str: string): string[] {
       result.push(char + perm);
     }
   }
-  return [...new Set(result)];
+  return Array.from(new Set(result));
 }
 
 export const winConditions: Record<BetType, WinCondition> = {
@@ -203,6 +216,22 @@ export const winConditions: Record<BetType, WinCondition> = {
     description: { th: "4 ตัวโต๊ด สลับตำแหน่งได้", en: "Match 4 digits any order" },
     checkWin: (bet, result) => getPermutations(bet).includes(result.slice(-4)),
     digitCount: 4,
+  },
+  // Permutation Calculator
+  FOUR_TOP: {
+    description: { th: "4 ตัวบน ตรงกับ 4 ตัวบน", en: "Match top 4 digits" },
+    checkWin: (bet, result) => bet === result.slice(0, 4),
+    digitCount: 4,
+  },
+  FIVE_TOP: {
+    description: { th: "5 ตัวบน ตรงกับ 5 ตัวบน", en: "Match top 5 digits" },
+    checkWin: (bet, result) => bet === result.slice(0, 5),
+    digitCount: 5,
+  },
+  REVERSE: {
+    description: { th: "กลับ 2 ตัว", en: "Reverse 2 digits" },
+    checkWin: (bet, result) => bet.split("").reverse().join("") === result.slice(-2),
+    digitCount: 2,
   },
 };
 

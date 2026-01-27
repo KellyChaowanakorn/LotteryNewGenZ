@@ -24,6 +24,7 @@ import {
   lotteryTypes, 
   lotteryTypeNames,
   betTypeNames,
+  payoutRates,
   type LotteryType,
   type BetType,
   type PayoutSetting
@@ -58,19 +59,9 @@ function getUniquePermutations(digits: string): string[] {
   return Array.from(new Set(result));
 }
 
+// Use payoutRates from schema or fallback
 function getDefaultPayoutRate(betType: BetType): number {
-  const defaults: Record<BetType, number> = {
-    TWO_TOP: 60,
-    TWO_BOTTOM: 60,
-    THREE_TOP: 500,
-    THREE_TOD: 90,
-    FOUR_TOP: 900,
-    FIVE_TOP: 2000,
-    RUN_TOP: 3,
-    RUN_BOTTOM: 4,
-    REVERSE: 94
-  };
-  return defaults[betType] || 1;
+  return payoutRates[betType] || 1;
 }
 
 type PermBetType = "TWO_TOP" | "TWO_BOTTOM" | "THREE_TOP" | "FOUR_TOP" | "FIVE_TOP";
@@ -186,6 +177,7 @@ export default function PermutationCalculator() {
         betType,
         numbers: num,
         amount: price,
+        potentialWin: price * payoutRate,
         isSet: true,
         setIndex: idx + 1
       });
@@ -208,67 +200,66 @@ export default function PermutationCalculator() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-            <Shuffle className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold">
-            {language === "th" ? "คำนวณหวยกลับ (Permutation)" : "Permutation Calculator"}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {language === "th" 
-              ? "ใส่ตัวเลข ระบบจะสร้างทุกรูปแบบที่เป็นไปได้อัตโนมัติ" 
-              : "Enter digits, system generates all possible arrangements automatically"}
-          </p>
-        </div>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-primary/10 rounded-xl">
+                <Shuffle className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl md:text-2xl">
+                  {language === "th" ? "เครื่องคิดเลขกลับ" : "Permutation Calculator"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "th" 
+                    ? "คำนวณเลขสลับตำแหน่งทั้งหมดและเพิ่มลงตะกร้า" 
+                    : "Calculate all number permutations and add to cart"}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Hash className="h-5 w-5" />
-                  {language === "th" ? "ใส่ตัวเลข" : "Enter Digits"}
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Hash className="h-5 w-5 text-primary" />
+                  {language === "th" ? "ตั้งค่า" : "Settings"}
                 </CardTitle>
-                <CardDescription>
-                  {language === "th" 
-                    ? `ใส่ตัวเลข ${requiredDigits} ตัว ระบบจะสร้างทุกรูปแบบให้` 
-                    : `Enter ${requiredDigits} digits, system generates all arrangements`}
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{language === "th" ? "ประเภทหวย" : "Lottery Type"}</Label>
-                    <Select value={lotteryType} onValueChange={(v) => setLotteryType(v as LotteryType)}>
-                      <SelectTrigger data-testid="select-lottery-type-perm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lotteryTypes.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {lotteryTypeNames[type][language]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label>{language === "th" ? "ประเภทหวย" : "Lottery Type"}</Label>
+                  <Select value={lotteryType} onValueChange={(v) => setLotteryType(v as LotteryType)}>
+                    <SelectTrigger data-testid="select-lottery-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lotteryTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {lotteryTypeNames[type][language]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label>{language === "th" ? "ประเภทแทง" : "Bet Type"}</Label>
-                    <Select value={betType} onValueChange={(v) => setBetType(v as PermBetType)}>
-                      <SelectTrigger data-testid="select-bet-type-perm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {permBetTypes.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {betTypeNames[type][language]} ({digitCountMap[type]} {language === "th" ? "ตัว" : "digits"})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label>{language === "th" ? "ประเภทแทง" : "Bet Type"}</Label>
+                  <Select value={betType} onValueChange={(v) => setBetType(v as PermBetType)}>
+                    <SelectTrigger data-testid="select-bet-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {permBetTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {betTypeNames[type][language]} ({digitCountMap[type]} {language === "th" ? "ตัว" : "digits"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">

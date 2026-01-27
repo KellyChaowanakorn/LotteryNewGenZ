@@ -126,11 +126,40 @@ export async function isNumberBlocked(
       and(
         eq(blockedNumbers.lotteryType, lotteryType),
         eq(blockedNumbers.number, number),
+        eq(blockedNumbers.isActive, 1),
         betType ? eq(blockedNumbers.betType, betType) : undefined
       )
     );
 
   return result.length > 0;
+}
+
+export async function getBlockedNumbers() {
+  return db
+    .select()
+    .from(blockedNumbers)
+    .where(eq(blockedNumbers.isActive, 1))
+    .orderBy(desc(blockedNumbers.createdAt));
+}
+
+export async function addBlockedNumber(data: {
+  lotteryType: string;
+  number: string;
+  betType?: string | null;
+}) {
+  await db.insert(blockedNumbers).values({
+    lotteryType: data.lotteryType,
+    number: data.number,
+    betType: data.betType ?? null,
+    isActive: 1,
+  });
+}
+
+export async function removeBlockedNumber(id: number) {
+  await db
+    .update(blockedNumbers)
+    .set({ isActive: 0 })
+    .where(eq(blockedNumbers.id, id));
 }
 
 /* =========================
@@ -169,33 +198,45 @@ export async function getResultsByDate(
    PAYOUT SETTINGS
 ========================= */
 
+export async function getPayoutSettings() {
+  return db.select().from(payoutSettings);
+}
+
+export async function updatePayoutRate(betType: string, rate: number) {
+  const existing = await db
+    .select()
+    .from(payoutSettings)
+    .where(eq(payoutSettings.betType, betType));
+
+  if (existing.length === 0) {
+    await db.insert(payoutSettings).values({ betType, rate });
+  } else {
+    await db
+      .update(payoutSettings)
+      .set({ rate, updatedAt: Math.floor(Date.now() / 1000) })
+      .where(eq(payoutSettings.betType, betType));
+  }
+}
+
 export async function initializePayoutRates(): Promise<void> {
   try {
     const defaultRates: Record<string, number> = {
-      TWO_TOP: 60,
-      TWO_BOTTOM: 60,
-      THREE_TOP: 500,
-      THREE_TOD: 90,
-      FOUR_TOP: 900,
-      FIVE_TOP: 2000,
+      TWO_TOP: 90,
+      TWO_BOTTOM: 90,
+      THREE_TOP: 900,
+      THREE_TOD: 150,
       RUN_TOP: 3,
-      RUN_BOTTOM: 4,
-      REVERSE: 94,
+      RUN_BOTTOM: 3,
+      THREE_STRAIGHT: 900,
+      TWO_STRAIGHT: 90,
+      THREE_REVERSE: 450,
+      TWO_REVERSE: 45,
+      FOUR_STRAIGHT: 6000,
+      FOUR_TOD: 250,
+      FOUR_TOP: 6000,
+      FIVE_TOP: 60000,
+      REVERSE: 90,
     };
-
-    const oldBetTypes = [
-      "THREE_TOOD",
-      "THREE_FRONT",
-      "THREE_BOTTOM",
-      "THREE_REVERSE",
-    ];
-
-    for (const oldType of oldBetTypes) {
-      await db
-        .delete(payoutSettings)
-        .where(eq(payoutSettings.betType, oldType))
-        .catch(() => {});
-    }
 
     for (const [betType, rate] of Object.entries(defaultRates)) {
       const existing = await db
@@ -209,12 +250,6 @@ export async function initializePayoutRates(): Promise<void> {
           .insert(payoutSettings)
           .values({ betType, rate })
           .catch(() => {});
-      } else {
-        await db
-          .update(payoutSettings)
-          .set({ rate })
-          .where(eq(payoutSettings.betType, betType))
-          .catch(() => {});
       }
     }
   } catch (error) {
@@ -225,6 +260,32 @@ export async function initializePayoutRates(): Promise<void> {
 /* =========================
    BET TYPE SETTINGS
 ========================= */
+
+export async function getBetTypeSettings() {
+  return db.select().from(betTypeSettings);
+}
+
+export async function updateBetTypeSetting(betType: string, isEnabled: boolean) {
+  const existing = await db
+    .select()
+    .from(betTypeSettings)
+    .where(eq(betTypeSettings.betType, betType));
+
+  if (existing.length === 0) {
+    await db.insert(betTypeSettings).values({ 
+      betType, 
+      isEnabled: isEnabled ? 1 : 0 
+    });
+  } else {
+    await db
+      .update(betTypeSettings)
+      .set({ 
+        isEnabled: isEnabled ? 1 : 0, 
+        updatedAt: Math.floor(Date.now() / 1000) 
+      })
+      .where(eq(betTypeSettings.betType, betType));
+  }
+}
 
 export async function initializeBetTypeSettings(): Promise<void> {
   try {
@@ -246,6 +307,11 @@ export async function initializeBetTypeSettings(): Promise<void> {
     console.error("Bet type settings initialization error:", error);
   }
 }
+
+/* =========================
+   EXPORT STORAGE OBJECT
+========================= */
+
 export const storage = {
   // users
   getUserByUsername,
@@ -263,12 +329,21 @@ export const storage = {
 
   // blocked numbers
   isNumberBlocked,
+  getBlockedNumbers,
+  addBlockedNumber,
+  removeBlockedNumber,
 
   // lottery results
   getLatestResults,
   getResultsByDate,
 
-  // settings
+  // payout settings
+  getPayoutSettings,
+  updatePayoutRate,
   initializePayoutRates,
+
+  // bet type settings
+  getBetTypeSettings,
+  updateBetTypeSetting,
   initializeBetTypeSettings,
 };

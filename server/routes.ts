@@ -16,7 +16,43 @@ import { lotteryResults } from "@shared/schema";
 
 export function registerRoutes(app: Express): Server {
   /* =========================
-     AUTH
+     ADMIN AUTH (Session-based)
+     Username: QNQgod1688
+     Password: $$$QNQgod1688
+  ========================= */
+
+  const ADMIN_USERNAME = "QNQgod1688";
+  const ADMIN_PASSWORD = "$$$QNQgod1688";
+
+  app.post("/api/admin/login", (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        req.session.isAdmin = true;
+        return res.json({ success: true, message: "Admin login successful" });
+      }
+      
+      return res.status(401).json({ success: false, error: "Invalid credentials" });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: "Invalid request" });
+    }
+  });
+
+  app.get("/api/admin/check", (req: Request, res: Response) => {
+    res.json({ isAdmin: req.session.isAdmin === true });
+  });
+
+  app.post("/api/admin/logout", (req: Request, res: Response) => {
+    req.session.isAdmin = false;
+    req.session.destroy((err) => {
+      if (err) console.error("Session destroy error:", err);
+    });
+    res.json({ success: true, message: "Admin logged out" });
+  });
+
+  /* =========================
+     USER AUTH
   ========================= */
 
   app.post("/api/login", async (req: Request, res: Response) => {
@@ -86,10 +122,10 @@ export function registerRoutes(app: Express): Server {
       }
 
       const threeTopNumbers = result.threeDigitTop
-        ? result.threeDigitTop.split(",").map((n) => n.trim()).filter((n) => n)
+        ? result.threeDigitTop.split(",").map((n: string) => n.trim()).filter((n: string) => n)
         : [];
       const threeBottomNumbers = result.threeDigitBottom
-        ? result.threeDigitBottom.split(",").map((n) => n.trim()).filter((n) => n)
+        ? result.threeDigitBottom.split(",").map((n: string) => n.trim()).filter((n: string) => n)
         : [];
 
       res.json({
@@ -245,6 +281,11 @@ export function registerRoutes(app: Express): Server {
   ========================= */
 
   app.post("/api/admin/results", async (req: Request, res: Response) => {
+    // Check admin auth
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     try {
       const { lotteryType, drawDate, firstPrize, threeDigitTop, threeDigitBottom, twoDigitTop, twoDigitBottom } = req.body;
       await db.insert(lotteryResults).values({
@@ -265,6 +306,104 @@ export function registerRoutes(app: Express): Server {
   });
 
   /* =========================
+     BLOCKED NUMBERS
+  ========================= */
+
+  app.get("/api/blocked-numbers", async (_req: Request, res: Response) => {
+    try {
+      const blocked = await storage.getBlockedNumbers();
+      res.json(blocked);
+    } catch (error: any) {
+      console.error("Error fetching blocked numbers:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/blocked-numbers", async (req: Request, res: Response) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const { lotteryType, number, betType } = req.body;
+      await storage.addBlockedNumber({ lotteryType, number, betType });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/blocked-numbers/:id", async (req: Request, res: Response) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const id = Number(req.params.id);
+      await storage.removeBlockedNumber(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     PAYOUT SETTINGS
+  ========================= */
+
+  app.get("/api/payout-settings", async (_req: Request, res: Response) => {
+    try {
+      const settings = await storage.getPayoutSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/payout-settings/:betType", async (req: Request, res: Response) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const { betType } = req.params;
+      const { rate } = req.body;
+      await storage.updatePayoutRate(betType, rate);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     BET TYPE SETTINGS
+  ========================= */
+
+  app.get("/api/bet-type-settings", async (_req: Request, res: Response) => {
+    try {
+      const settings = await storage.getBetTypeSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/bet-type-settings/:betType", async (req: Request, res: Response) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const { betType } = req.params;
+      const { isEnabled } = req.body;
+      await storage.updateBetTypeSetting(betType, isEnabled);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
      BETS
   ========================= */
 
@@ -278,7 +417,7 @@ export function registerRoutes(app: Express): Server {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      const total = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+      const total = items.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
       if (user.balance < total) {
         return res.status(400).json({ error: "Insufficient balance" });
       }
@@ -346,7 +485,11 @@ export function registerRoutes(app: Express): Server {
      SETTINGS INIT
   ========================= */
 
-  app.post("/api/admin/init", async (_req: Request, res: Response) => {
+  app.post("/api/admin/init", async (req: Request, res: Response) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     await storage.initializePayoutRates();
     await storage.initializeBetTypeSettings();
     res.json({ success: true });
