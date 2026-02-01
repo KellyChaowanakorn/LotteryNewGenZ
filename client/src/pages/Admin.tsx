@@ -51,7 +51,11 @@ import {
   Trophy,
   Play,
   LogOut,
-  ImageIcon
+  ImageIcon,
+  Calendar,
+  CalendarCheck,
+  CalendarX,
+  Info
 } from "lucide-react";
 import {
   Dialog,
@@ -138,6 +142,16 @@ export default function Admin() {
 
   const [winnersLotteryType, setWinnersLotteryType] = useState<LotteryType | "">("");
   const [winnersDrawDate, setWinnersDrawDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Scheduling states for blocked numbers
+  const [blockedUseSchedule, setBlockedUseSchedule] = useState(false);
+  const [blockedStartDate, setBlockedStartDate] = useState("");
+  const [blockedEndDate, setBlockedEndDate] = useState("");
+
+  // Scheduling states for limits
+  const [limitUseSchedule, setLimitUseSchedule] = useState(false);
+  const [limitStartDate, setLimitStartDate] = useState("");
+  const [limitEndDate, setLimitEndDate] = useState("");
 
   const handleLogout = async () => {
     await logout();
@@ -274,13 +288,22 @@ export default function Admin() {
   });
 
   const addBlockedMutation = useMutation({
-    mutationFn: async (data: { lotteryType: string; number: string; betType: string | null }) => {
+    mutationFn: async (data: { 
+      lotteryType: string; 
+      number: string; 
+      betType: string | null;
+      startDate?: string | null;
+      endDate?: string | null;
+    }) => {
       const res = await apiRequest("POST", "/api/blocked-numbers", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/blocked-numbers"] });
       setNewNumber("");
+      setBlockedUseSchedule(false);
+      setBlockedStartDate("");
+      setBlockedEndDate("");
       toast({
         title: language === "th" ? "เพิ่มเลขอั้นสำเร็จ" : "Blocked number added"
       });
@@ -294,8 +317,8 @@ export default function Admin() {
   });
 
   const updateBlockedMutation = useMutation({
-    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
-      const res = await apiRequest("PATCH", `/api/blocked-numbers/${id}`, { isActive });
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean | number }) => {
+      const res = await apiRequest("PATCH", `/api/blocked-numbers/${id}`, { isActive: isActive ? 1 : 0 });
       return res.json();
     },
     onSuccess: () => {
@@ -427,7 +450,13 @@ export default function Admin() {
   });
 
   const addBetLimitMutation = useMutation({
-    mutationFn: async (data: { number: string; maxAmount: number; lotteryTypes: string[] }) => {
+    mutationFn: async (data: { 
+      number: string; 
+      maxAmount: number; 
+      lotteryTypes: string[];
+      startDate?: string | null;
+      endDate?: string | null;
+    }) => {
       const res = await apiRequest("POST", "/api/bet-limits", data);
       return res.json();
     },
@@ -437,6 +466,9 @@ export default function Admin() {
       setLimitMaxAmount("");
       setLimitLotteryTypes([]);
       setIsAllLotteryTypes(true);
+      setLimitUseSchedule(false);
+      setLimitStartDate("");
+      setLimitEndDate("");
       toast({
         title: language === "th" ? "เพิ่มลิมิตสำเร็จ" : "Bet limit added"
       });
@@ -450,8 +482,8 @@ export default function Admin() {
   });
 
   const updateBetLimitMutation = useMutation({
-    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
-      const res = await apiRequest("PATCH", `/api/bet-limits/${id}`, { isActive });
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean | number }) => {
+      const res = await apiRequest("PATCH", `/api/bet-limits/${id}`, { isActive: isActive ? 1 : 0 });
       return res.json();
     },
     onSuccess: () => {
@@ -669,11 +701,13 @@ export default function Admin() {
     addBlockedMutation.mutate({
       lotteryType: newLotteryType,
       number: newNumber,
-      betType: newBetType === "all" ? null : newBetType
+      betType: newBetType === "all" ? null : newBetType,
+      startDate: blockedUseSchedule && blockedStartDate ? blockedStartDate : null,
+      endDate: blockedUseSchedule && blockedEndDate ? blockedEndDate : null
     });
   };
 
-  const handleToggleBlocked = (id: number, isActive: boolean) => {
+  const handleToggleBlocked = (id: number, isActive: boolean | number) => {
     updateBlockedMutation.mutate({ id, isActive: !isActive });
   };
 
@@ -1795,6 +1829,110 @@ export default function Admin() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Scheduling Section for Blocked Numbers */}
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-primary" />
+                      <span className="font-medium">
+                        {language === "th" ? "ตั้งเวลาล่วงหน้า (GMT+7)" : "Schedule (GMT+7)"}
+                      </span>
+                    </div>
+                    <Switch
+                      checked={blockedUseSchedule}
+                      onCheckedChange={setBlockedUseSchedule}
+                      data-testid="switch-blocked-schedule"
+                    />
+                  </div>
+
+                  {blockedUseSchedule && (
+                    <div className="grid gap-4 sm:grid-cols-2 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-green-600">
+                          <CalendarCheck className="h-4 w-4" />
+                          {language === "th" ? "เริ่มต้น" : "Start"}
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={blockedStartDate}
+                          onChange={(e) => setBlockedStartDate(e.target.value)}
+                          className="border-green-500/30"
+                          data-testid="input-blocked-start-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-red-600">
+                          <CalendarX className="h-4 w-4" />
+                          {language === "th" ? "สิ้นสุด" : "End"}
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={blockedEndDate}
+                          onChange={(e) => setBlockedEndDate(e.target.value)}
+                          min={blockedStartDate}
+                          className="border-red-500/30"
+                          data-testid="input-blocked-end-date"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const now = new Date();
+                            const end = new Date(now);
+                            end.setHours(23, 59, 59, 999);
+                            setBlockedStartDate(now.toISOString().slice(0, 16));
+                            setBlockedEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "วันนี้" : "Today"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const start = new Date();
+                            start.setDate(start.getDate() + 1);
+                            start.setHours(0, 0, 0, 0);
+                            const end = new Date(start);
+                            end.setHours(23, 59, 59, 999);
+                            setBlockedStartDate(start.toISOString().slice(0, 16));
+                            setBlockedEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "พรุ่งนี้" : "Tomorrow"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const now = new Date();
+                            const end = new Date(now);
+                            end.setDate(end.getDate() + 7);
+                            setBlockedStartDate(now.toISOString().slice(0, 16));
+                            setBlockedEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "7 วัน" : "7 Days"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!blockedUseSchedule && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      {language === "th" 
+                        ? "จะมีผลบังคับใช้ทันทีและตลอดไป" 
+                        : "Will be active immediately and forever"}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -1849,7 +1987,7 @@ export default function Admin() {
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Switch
-                                  checked={bn.isActive}
+                                  checked={!!bn.isActive}
                                   onCheckedChange={() => handleToggleBlocked(bn.id, bn.isActive)}
                                   data-testid={`switch-blocked-${bn.id}`}
                                 />
@@ -2050,7 +2188,9 @@ export default function Admin() {
                         addBetLimitMutation.mutate({
                           number: limitNumber,
                           maxAmount: parseFloat(limitMaxAmount),
-                          lotteryTypes: isAllLotteryTypes ? [] : limitLotteryTypes
+                          lotteryTypes: isAllLotteryTypes ? [] : limitLotteryTypes,
+                          startDate: limitUseSchedule && limitStartDate ? limitStartDate : null,
+                          endDate: limitUseSchedule && limitEndDate ? limitEndDate : null
                         });
                       }}
                       disabled={!limitNumber || !limitMaxAmount || addBetLimitMutation.isPending}
@@ -2091,6 +2231,110 @@ export default function Admin() {
                     </div>
                   </div>
                 )}
+
+                {/* Scheduling Section for Limits */}
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-primary" />
+                      <span className="font-medium">
+                        {language === "th" ? "ตั้งเวลาล่วงหน้า (GMT+7)" : "Schedule (GMT+7)"}
+                      </span>
+                    </div>
+                    <Switch
+                      checked={limitUseSchedule}
+                      onCheckedChange={setLimitUseSchedule}
+                      data-testid="switch-limit-schedule"
+                    />
+                  </div>
+
+                  {limitUseSchedule && (
+                    <div className="grid gap-4 sm:grid-cols-2 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-green-600">
+                          <CalendarCheck className="h-4 w-4" />
+                          {language === "th" ? "เริ่มต้น" : "Start"}
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={limitStartDate}
+                          onChange={(e) => setLimitStartDate(e.target.value)}
+                          className="border-green-500/30"
+                          data-testid="input-limit-start-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-red-600">
+                          <CalendarX className="h-4 w-4" />
+                          {language === "th" ? "สิ้นสุด" : "End"}
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={limitEndDate}
+                          onChange={(e) => setLimitEndDate(e.target.value)}
+                          min={limitStartDate}
+                          className="border-red-500/30"
+                          data-testid="input-limit-end-date"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const now = new Date();
+                            const end = new Date(now);
+                            end.setHours(23, 59, 59, 999);
+                            setLimitStartDate(now.toISOString().slice(0, 16));
+                            setLimitEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "วันนี้" : "Today"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const start = new Date();
+                            start.setDate(start.getDate() + 1);
+                            start.setHours(0, 0, 0, 0);
+                            const end = new Date(start);
+                            end.setHours(23, 59, 59, 999);
+                            setLimitStartDate(start.toISOString().slice(0, 16));
+                            setLimitEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "พรุ่งนี้" : "Tomorrow"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const now = new Date();
+                            const end = new Date(now);
+                            end.setDate(end.getDate() + 7);
+                            setLimitStartDate(now.toISOString().slice(0, 16));
+                            setLimitEndDate(end.toISOString().slice(0, 16));
+                          }}
+                        >
+                          {language === "th" ? "7 วัน" : "7 Days"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!limitUseSchedule && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      {language === "th" 
+                        ? "จะมีผลบังคับใช้ทันทีและตลอดไป" 
+                        : "Will be active immediately and forever"}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -2154,7 +2398,7 @@ export default function Admin() {
                           </TableCell>
                           <TableCell>
                             <Switch
-                              checked={limit.isActive}
+                              checked={!!limit.isActive}
                               onCheckedChange={(checked) => 
                                 updateBetLimitMutation.mutate({ id: limit.id, isActive: checked })
                               }

@@ -208,7 +208,7 @@ export default function PermutationCalculator() {
               </div>
               <div>
                 <CardTitle className="text-xl md:text-2xl">
-                  {language === "th" ? "เครื่องคิดเลขกลับ" : "Permutation Calculator"}
+                  {language === "th" ? "ซื้อครบทุกการสลับตำแหน่ง" : "permutations"}
                 </CardTitle>
                 <CardDescription>
                   {language === "th" 

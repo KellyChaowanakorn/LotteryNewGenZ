@@ -396,6 +396,6 @@ export type BetLimitWithLotteryTypes = {
   number: string;
   maxAmount: number;
   lotteryTypes: string[];
-  isActive: boolean;
+  isActive: number;
   createdAt: number;
 };
