@@ -715,7 +715,7 @@ export default function Admin() {
     deleteBlockedMutation.mutate(id);
   };
 
-  const handleToggleUserBlock = (userId: number, isBlocked: boolean) => {
+ const handleToggleUserBlock = (userId: number, isBlocked: number | boolean) => {
     updateUserMutation.mutate({ id: userId, isBlocked: !isBlocked });
   };
 
