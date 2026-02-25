@@ -1,0 +1,1 @@
+ALTER TABLE `lottery_results` ADD `second_prize` text;

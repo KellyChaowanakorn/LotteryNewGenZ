@@ -11,19 +11,19 @@ interface BetTypeSelectorProps {
 
 // Stock lottery categories
 const stockCategories = {
-  threeDigit: ["THREE_STRAIGHT", "THREE_TOD", "THREE_REVERSE"] as BetType[],
-  twoDigit: ["TWO_STRAIGHT", "TWO_REVERSE"] as BetType[],
+  threeDigit: ["THREE_TOP", "THREE_TOD"] as BetType[],
+  twoDigit: ["TWO_TOP", "TWO_BOTTOM"] as BetType[],
 };
 
 // Malaysia 4D categories
 const malaysiaCategories = {
-  fourDigit: ["FOUR_STRAIGHT", "FOUR_TOD"] as BetType[],
-  threeDigit: ["THREE_STRAIGHT", "THREE_TOD"] as BetType[],
+  fourDigit: ["FOUR_TOP"] as BetType[],
+  threeDigit: ["THREE_TOP", "THREE_TOD"] as BetType[],
 };
 
 // Thai Gov categories
 const thaiGovCategories = {
-  threeDigit: ["THREE_TOP", "THREE_TOD"] as BetType[],
+  threeDigit: ["THREE_TOP", "THREE_TOD", "THREE_FRONT", "THREE_BACK"] as BetType[],
   twoDigit: ["TWO_TOP", "TWO_BOTTOM"] as BetType[],
   running: ["RUN_TOP", "RUN_BOTTOM"] as BetType[],
 };
@@ -69,7 +69,7 @@ export function BetTypeSelector({ selectedType, onSelect, lotteryType }: BetType
       <div className="space-y-4">
         <div>
           <h4 className="text-sm font-semibold text-muted-foreground mb-2">{language === "th" ? "3 ตัว" : "3 Digits"}</h4>
-          <div className="grid grid-cols-3 gap-2">{stockCategories.threeDigit.map(renderBetType)}</div>
+          <div className="grid grid-cols-2 gap-2">{stockCategories.threeDigit.map(renderBetType)}</div>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-muted-foreground mb-2">{language === "th" ? "2 ตัว" : "2 Digits"}</h4>
@@ -92,7 +92,7 @@ export function BetTypeSelector({ selectedType, onSelect, lotteryType }: BetType
       <div className="space-y-4">
         <div>
           <h4 className="text-sm font-semibold text-muted-foreground mb-2">{language === "th" ? "4 ตัว" : "4 Digits"}</h4>
-          <div className="grid grid-cols-2 gap-2">{malaysiaCategories.fourDigit.map(renderBetType)}</div>
+          <div className="grid grid-cols-1 gap-2">{malaysiaCategories.fourDigit.map(renderBetType)}</div>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-muted-foreground mb-2">{language === "th" ? "3 ตัว" : "3 Digits"}</h4>
