@@ -17,22 +17,25 @@ import { lotteryResults } from "@shared/schema";
 export function registerRoutes(app: Express): Server {
   /* =========================
      ADMIN AUTH (Session-based)
-     Username: QNQgod1688
-     Password: $$$QNQgod1688
   ========================= */
 
   const ADMIN_USERNAME = "QNQgod1688";
   const ADMIN_PASSWORD = "$$$QNQgod1688";
 
+  const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+  };
+
   app.post("/api/admin/login", (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
-      
       if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
         req.session.isAdmin = true;
         return res.json({ success: true, message: "Admin login successful" });
       }
-      
       return res.status(401).json({ success: false, error: "Invalid credentials" });
     } catch (error) {
       return res.status(400).json({ success: false, error: "Invalid request" });
@@ -71,14 +74,57 @@ export function registerRoutes(app: Express): Server {
       if (existing) {
         return res.status(400).json({ error: "Username already exists" });
       }
-      await storage.createUser({
-        username,
-        password,
-        referralCode,
-        referredBy: referredBy || null,
-      });
+      await storage.createUser({ username, password, referralCode, referredBy: referredBy || null });
       const user = await storage.getUserByUsername(username);
       res.json({ user });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     USERS
+  ========================= */
+
+  app.get("/api/users/:id", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    const user = await storage.getUserById(id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  });
+
+  /* =========================
+     ADMIN - USERS
+  ========================= */
+
+  app.get("/api/admin/users", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const { isBlocked } = req.body;
+      await storage.updateUserBlocked(id, isBlocked);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     ADMIN - STATS
+  ========================= */
+
+  app.get("/api/admin/stats", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const stats = await storage.getAdminStats();
+      res.json(stats);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -90,21 +136,88 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/results", async (req: Request, res: Response) => {
     const { lotteryType } = req.query as { lotteryType?: string };
-    if (!lotteryType) {
-      return res.status(400).json({ error: "lotteryType required" });
-    }
+    if (!lotteryType) return res.status(400).json({ error: "lotteryType required" });
     const result = await storage.getLatestResults(lotteryType);
     res.json(result);
   });
 
   /* =========================
-     1. THAI GOVERNMENT LOTTERY
+     LOTTERY RESULTS - ADMIN CRUD
+  ========================= */
+
+  app.get("/api/lottery-results", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const results = await storage.getAllLotteryResults();
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/lottery-results", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { lotteryType, drawDate, firstPrize, threeDigitTop, threeDigitBottom, twoDigitTop, twoDigitBottom } = req.body;
+      if (!lotteryType || !drawDate) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      await storage.createLotteryResult({
+        lotteryType,
+        drawDate,
+        firstPrize,
+        threeDigitTop,
+        threeDigitBottom,
+        twoDigitTop,
+        twoDigitBottom,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/lottery-results/:id/process", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const result = await storage.processLotteryResult(id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     ADMIN - WINNERS & PROCESSED DRAWS
+  ========================= */
+
+  app.get("/api/admin/winners", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { lotteryType, drawDate } = req.query as { lotteryType?: string; drawDate?: string };
+      if (!lotteryType || !drawDate) {
+        return res.status(400).json({ error: "lotteryType and drawDate required" });
+      }
+      const data = await storage.getWinners(lotteryType, drawDate);
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/processed-draws", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const draws = await storage.getProcessedDraws();
+      res.json(draws);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
+     LIVE RESULTS - THAI GOV
   ========================= */
 
   app.get("/api/results/live/thai-gov", async (_req: Request, res: Response) => {
     try {
       const result = await fetchThaiGovLottery();
-
       if (!result.error) {
         try {
           await db.insert(lotteryResults).values({
@@ -133,14 +246,7 @@ export function registerRoutes(app: Express): Server {
         response: {
           date: result.date,
           endpoint: result.source,
-          prizes: [
-            {
-              id: "prizeFirst",
-              name: "รางวัลที่ 1",
-              reward: "6000000",
-              number: result.firstPrize ? [result.firstPrize] : [],
-            },
-          ],
+          prizes: [{ id: "prizeFirst", name: "รางวัลที่ 1", reward: "6000000", number: result.firstPrize ? [result.firstPrize] : [] }],
           runningNumbers: [
             { id: "runningNumberFrontThree", name: "รางวัลเลขหน้า 3 ตัว", reward: "4000", number: threeTopNumbers },
             { id: "runningNumberBackThree", name: "รางวัลเลขท้าย 3 ตัว", reward: "4000", number: threeBottomNumbers },
@@ -156,7 +262,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   /* =========================
-     2. THAI STOCK (SET)
+     LIVE RESULTS - THAI STOCK
   ========================= */
 
   app.get("/api/results/live/thai-stock", async (_req: Request, res: Response) => {
@@ -178,13 +284,12 @@ export function registerRoutes(app: Express): Server {
       }
       res.json(result);
     } catch (error: any) {
-      console.error("Error fetching Thai Stock:", error);
       res.status(500).json({ error: "Failed to fetch Thai Stock data" });
     }
   });
 
   /* =========================
-     3. INTERNATIONAL STOCKS
+     LIVE RESULTS - INTERNATIONAL STOCKS
   ========================= */
 
   app.get("/api/results/live/stock/:symbol", async (req: Request, res: Response) => {
@@ -207,13 +312,12 @@ export function registerRoutes(app: Express): Server {
       }
       res.json(result);
     } catch (error: any) {
-      console.error("Error fetching stock:", error);
       res.status(500).json({ error: "Failed to fetch stock data" });
     }
   });
 
   /* =========================
-     4. ALL STOCKS
+     LIVE RESULTS - ALL STOCKS
   ========================= */
 
   app.get("/api/results/live/stocks", async (_req: Request, res: Response) => {
@@ -221,13 +325,12 @@ export function registerRoutes(app: Express): Server {
       const results = await fetchAllStocks();
       res.json(results);
     } catch (error: any) {
-      console.error("Error fetching all stocks:", error);
       res.status(500).json({ error: "Failed to fetch stock data" });
     }
   });
 
   /* =========================
-     5. MALAYSIA 4D
+     LIVE RESULTS - MALAYSIA 4D
   ========================= */
 
   app.get("/api/results/live/malaysia", async (_req: Request, res: Response) => {
@@ -253,13 +356,12 @@ export function registerRoutes(app: Express): Server {
       }
       res.json(results);
     } catch (error: any) {
-      console.error("Error fetching Malaysia 4D:", error);
       res.status(500).json({ error: "Failed to fetch Malaysia 4D data" });
     }
   });
 
   /* =========================
-     6. ALL RESULTS
+     LIVE RESULTS - ALL
   ========================= */
 
   app.get("/api/results/live/all", async (_req: Request, res: Response) => {
@@ -271,36 +373,22 @@ export function registerRoutes(app: Express): Server {
       ]);
       res.json({ thaiGov, stocks, malaysia, timestamp: new Date().toISOString() });
     } catch (error: any) {
-      console.error("Error fetching all results:", error);
       res.status(500).json({ error: "Failed to fetch lottery results" });
     }
   });
 
   /* =========================
-     ADMIN - INSERT RESULTS
+     ADMIN - INSERT RESULTS (legacy)
   ========================= */
 
-  app.post("/api/admin/results", async (req: Request, res: Response) => {
-    // Check admin auth
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
+  app.post("/api/admin/results", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { lotteryType, drawDate, firstPrize, threeDigitTop, threeDigitBottom, twoDigitTop, twoDigitBottom } = req.body;
       await db.insert(lotteryResults).values({
-        lotteryType,
-        drawDate,
-        firstPrize,
-        threeDigitTop,
-        threeDigitBottom,
-        twoDigitTop,
-        twoDigitBottom,
-        isProcessed: 0,
+        lotteryType, drawDate, firstPrize, threeDigitTop, threeDigitBottom, twoDigitTop, twoDigitBottom, isProcessed: 0,
       });
       res.json({ success: true, message: "Results saved successfully" });
     } catch (error: any) {
-      console.error("Error saving results:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -314,30 +402,33 @@ export function registerRoutes(app: Express): Server {
       const blocked = await storage.getBlockedNumbers();
       res.json(blocked);
     } catch (error: any) {
-      console.error("Error fetching blocked numbers:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.post("/api/blocked-numbers", async (req: Request, res: Response) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
+  app.post("/api/blocked-numbers", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { lotteryType, number, betType } = req.body;
-      await storage.addBlockedNumber({ lotteryType, number, betType });
+      const { lotteryType, number, betType, startDate, endDate } = req.body;
+      await storage.addBlockedNumber({ lotteryType, number, betType, startDate, endDate });
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.delete("/api/blocked-numbers/:id", async (req: Request, res: Response) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
+  // ★ NEW: PATCH route for toggle active/inactive
+  app.patch("/api/blocked-numbers/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const { isActive } = req.body;
+      await storage.updateBlockedNumber(id, isActive);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
+  });
 
+  app.delete("/api/blocked-numbers/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id);
       await storage.removeBlockedNumber(id);
@@ -349,6 +440,7 @@ export function registerRoutes(app: Express): Server {
 
   /* =========================
      PAYOUT SETTINGS
+     ★ FIX: Support both /api/payout-settings AND /api/payout-rates
   ========================= */
 
   app.get("/api/payout-settings", async (_req: Request, res: Response) => {
@@ -360,11 +452,29 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.put("/api/payout-settings/:betType", async (req: Request, res: Response) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
+  // ★ Admin.tsx uses /api/payout-rates
+  app.get("/api/payout-rates", async (_req: Request, res: Response) => {
+    try {
+      const settings = await storage.getPayoutSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
+  });
 
+  app.put("/api/payout-settings/:betType", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { betType } = req.params;
+      const { rate } = req.body;
+      await storage.updatePayoutRate(betType, rate);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ★ Admin.tsx uses PATCH /api/payout-rates/:betType
+  app.patch("/api/payout-rates/:betType", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { betType } = req.params;
       const { rate } = req.body;
@@ -377,6 +487,7 @@ export function registerRoutes(app: Express): Server {
 
   /* =========================
      BET TYPE SETTINGS
+     ★ FIX: Support both PUT and PATCH
   ========================= */
 
   app.get("/api/bet-type-settings", async (_req: Request, res: Response) => {
@@ -388,11 +499,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.put("/api/bet-type-settings/:betType", async (req: Request, res: Response) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
+  app.put("/api/bet-type-settings/:betType", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { betType } = req.params;
+      const { isEnabled } = req.body;
+      await storage.updateBetTypeSetting(betType, isEnabled);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
+  });
 
+  // ★ Admin.tsx uses PATCH
+  app.patch("/api/bet-type-settings/:betType", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { betType } = req.params;
       const { isEnabled } = req.body;
@@ -404,8 +523,84 @@ export function registerRoutes(app: Express): Server {
   });
 
   /* =========================
+     BET LIMITS ★ NEW
+  ========================= */
+
+  app.get("/api/bet-limits", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const limits = await storage.getBetLimits();
+      res.json(limits);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/bet-limits", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { number, maxAmount, lotteryTypes, startDate, endDate } = req.body;
+      if (!number || !maxAmount) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      const limit = await storage.addBetLimit({
+        number,
+        maxAmount,
+        lotteryTypes: lotteryTypes || [],
+        startDate: startDate || null,
+        endDate: endDate || null,
+      });
+      res.json({ success: true, limit });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/bet-limits/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const { isActive } = req.body;
+      await storage.updateBetLimitStatus(id, isActive);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/bet-limits/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      await storage.deleteBetLimit(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /* =========================
      BETS
   ========================= */
+
+  // ★ GET /api/bets — supports ?userId=X (profile) or all bets (admin)
+  app.get("/api/bets", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.query as { userId?: string };
+      if (userId) {
+        const userBets = await storage.getUserBets(Number(userId));
+        return res.json(userBets);
+      }
+      // All bets (admin)
+      const allBets = await storage.getAllBets();
+      res.json(allBets);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Keep legacy route for backward compatibility
+  app.get("/api/bets/:userId", async (req: Request, res: Response) => {
+    const userId = Number(req.params.userId);
+    const userBets = await storage.getUserBets(userId);
+    res.json(userBets);
+  });
 
   app.post("/api/bets", async (req: Request, res: Response) => {
     try {
@@ -414,13 +609,13 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ error: "Invalid request body" });
       }
       const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
+      if (!user) return res.status(404).json({ error: "User not found" });
+
       const total = items.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
       if (user.balance < total) {
         return res.status(400).json({ error: "Insufficient balance" });
       }
+
       for (const item of items) {
         await storage.createBet({
           userId,
@@ -432,23 +627,33 @@ export function registerRoutes(app: Express): Server {
           drawDate: new Date().toISOString().split("T")[0],
         });
       }
+
       await storage.updateUserBalance(userId, user.balance - total);
       res.json({ success: true, newBalance: user.balance - total });
     } catch (error: any) {
-      console.error("Error creating bets:", error);
       res.status(500).json({ error: error.message });
     }
-  });
-
-  app.get("/api/bets/:userId", async (req: Request, res: Response) => {
-    const userId = Number(req.params.userId);
-    const bets = await storage.getUserBets(userId);
-    res.json(bets);
   });
 
   /* =========================
      TRANSACTIONS
   ========================= */
+
+  // ★ GET /api/transactions — all transactions (admin)
+  app.get("/api/transactions", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const txs = await storage.getAllTransactions();
+      res.json(txs);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/transactions/:userId", async (req: Request, res: Response) => {
+    const userId = Number(req.params.userId);
+    const txs = await storage.getUserTransactions(userId);
+    res.json(txs);
+  });
 
   app.post("/api/transactions", async (req: Request, res: Response) => {
     try {
@@ -457,39 +662,46 @@ export function registerRoutes(app: Express): Server {
       await storage.createTransaction({ userId, type, amount, reference, slipUrl: slipUrl || null });
       res.json({ success: true, reference });
     } catch (error: any) {
-      console.error("Error creating transaction:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/transactions/:userId", async (req: Request, res: Response) => {
-    const userId = Number(req.params.userId);
-    const transactions = await storage.getUserTransactions(userId);
-    res.json(transactions);
-  });
+  // ★ PATCH /api/transactions/:id — approve/reject (admin)
+  app.patch("/api/transactions/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const { status } = req.body;
 
-  /* =========================
-     USERS
-  ========================= */
+      const tx = await storage.updateTransactionStatus(id, status);
+      if (!tx) return res.status(404).json({ error: "Transaction not found" });
 
-  app.get("/api/users/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    const user = await storage.getUserById(id);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      // If approved deposit, add balance to user
+      if (status === "approved" && tx.type === "deposit") {
+        const user = await storage.getUserById(tx.userId);
+        if (user) {
+          await storage.updateUserBalance(tx.userId, user.balance + tx.amount);
+        }
+      }
+
+      // If approved withdrawal, deduct balance
+      if (status === "approved" && tx.type === "withdrawal") {
+        const user = await storage.getUserById(tx.userId);
+        if (user) {
+          await storage.updateUserBalance(tx.userId, Math.max(0, user.balance - tx.amount));
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-    res.json(user);
   });
 
   /* =========================
      SETTINGS INIT
   ========================= */
 
-  app.post("/api/admin/init", async (req: Request, res: Response) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
+  app.post("/api/admin/init", requireAdmin, async (_req: Request, res: Response) => {
     await storage.initializePayoutRates();
     await storage.initializeBetTypeSettings();
     res.json({ success: true });
@@ -503,6 +715,20 @@ export function registerRoutes(app: Express): Server {
     console.error("API error:", err);
     res.status(500).json({ error: "Internal Server Error" });
   });
+
+  /* =========================
+     AUTO-INIT on server start
+  ========================= */
+
+  (async () => {
+    try {
+      await storage.initializePayoutRates();
+      await storage.initializeBetTypeSettings();
+      console.log("✅ Payout rates & bet type settings initialized");
+    } catch (e) {
+      console.error("❌ Auto-init error:", e);
+    }
+  })();
 
   const httpServer = createServer(app);
   return httpServer;

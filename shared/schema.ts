@@ -5,42 +5,27 @@ import { z } from "zod";
 
 /* =========================
    CONSTANTS & TYPES
+   ★ Only 6 lottery types
 ========================= */
 
 export const lotteryTypes = [
   "THAI_GOV",
   "THAI_STOCK",
   "STOCK_NIKKEI",
-  "STOCK_HSI",      // ← เพิ่มใหม่: ฮั่งเส็ง
+  "STOCK_HSI",
   "STOCK_DOW",
-  "STOCK_FTSE",
-  "STOCK_DAX",
-  "LAO",
-  "HANOI",
   "MALAYSIA",
-  "SINGAPORE",
-  "KENO",
 ] as const;
 
 export type LotteryType = (typeof lotteryTypes)[number];
-
-/* =========================
-   LOTTERY TYPE NAMES (i18n SUPPORT)
-========================= */
 
 export const lotteryTypeNames: Record<LotteryType, { th: string; en: string }> = {
   THAI_GOV: { th: "รัฐบาลไทย", en: "Thai Government" },
   THAI_STOCK: { th: "หุ้นไทย", en: "Thai Stock" },
   STOCK_NIKKEI: { th: "นิเคอิ", en: "Nikkei" },
-  STOCK_HSI: { th: "ฮั่งเส็ง", en: "Hang Seng" },  // ← เพิ่มใหม่
+  STOCK_HSI: { th: "ฮั่งเส็ง", en: "Hang Seng" },
   STOCK_DOW: { th: "ดาวโจนส์", en: "Dow Jones" },
-  STOCK_FTSE: { th: "FTSE", en: "FTSE" },
-  STOCK_DAX: { th: "DAX", en: "DAX" },
-  LAO: { th: "ลาว", en: "Laos" },
-  HANOI: { th: "ฮานอย", en: "Hanoi" },
   MALAYSIA: { th: "มาเลเซีย", en: "Malaysia" },
-  SINGAPORE: { th: "สิงคโปร์", en: "Singapore" },
-  KENO: { th: "คีโน", en: "Keno" },
 };
 
 export const betTypes = [
@@ -48,8 +33,8 @@ export const betTypes = [
   "TWO_BOTTOM",
   "THREE_TOP",
   "THREE_TOD",
-  "THREE_FRONT",    // ← เพิ่มใหม่: 3 ตัวหน้า
-  "THREE_BACK",     // ← เพิ่มใหม่: 3 ตัวท้าย
+  "THREE_FRONT",
+  "THREE_BACK",
   "FOUR_TOP",
   "FIVE_TOP",
   "RUN_TOP",
@@ -59,17 +44,13 @@ export const betTypes = [
 
 export type BetType = (typeof betTypes)[number];
 
-/* =========================
-   BET TYPE NAMES (i18n SUPPORT)
-========================= */
-
 export const betTypeNames: Record<BetType, { th: string; en: string }> = {
   TWO_TOP: { th: "2 ตัวบน", en: "2D Top" },
   TWO_BOTTOM: { th: "2 ตัวล่าง", en: "2D Bottom" },
   THREE_TOP: { th: "3 ตัวบน", en: "3D Top" },
   THREE_TOD: { th: "3 ตัวโต๊ด", en: "3D Tod" },
-  THREE_FRONT: { th: "3 ตัวหน้า", en: "3D Front" },  // ← เพิ่มใหม่
-  THREE_BACK: { th: "3 ตัวท้าย", en: "3D Back" },    // ← เพิ่มใหม่
+  THREE_FRONT: { th: "3 ตัวหน้า", en: "3D Front" },
+  THREE_BACK: { th: "3 ตัวท้าย", en: "3D Back" },
   FOUR_TOP: { th: "4 ตัว", en: "4D" },
   FIVE_TOP: { th: "5 ตัว", en: "5D" },
   RUN_TOP: { th: "วิ่งบน", en: "Run Top" },
@@ -77,17 +58,13 @@ export const betTypeNames: Record<BetType, { th: string; en: string }> = {
   REVERSE: { th: "กลับ", en: "Reverse" },
 };
 
-/* =========================
-   PAYOUT RATES (FRONTEND SAFE)
-========================= */
-
 export const payoutRates: Record<BetType, number> = {
   TWO_TOP: 90,
   TWO_BOTTOM: 90,
   THREE_TOP: 900,
   THREE_TOD: 150,
-  THREE_FRONT: 450,   // ← เพิ่มใหม่
-  THREE_BACK: 450,    // ← เพิ่มใหม่
+  THREE_FRONT: 450,
+  THREE_BACK: 450,
   FOUR_TOP: 3000,
   FIVE_TOP: 10000,
   RUN_TOP: 3,
@@ -95,28 +72,14 @@ export const payoutRates: Record<BetType, number> = {
   REVERSE: 50,
 };
 
-/* =========================
-   ALLOWED BET TYPES PER LOTTERY
-========================= */
-
 export const allowedBetTypes: Record<LotteryType, BetType[]> = {
   THAI_GOV: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "THREE_FRONT", "THREE_BACK", "RUN_TOP", "RUN_BOTTOM"],
   THAI_STOCK: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
   STOCK_NIKKEI: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
   STOCK_HSI: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
   STOCK_DOW: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
-  STOCK_FTSE: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
-  STOCK_DAX: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
-  LAO: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
-  HANOI: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
   MALAYSIA: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD", "FOUR_TOP"],
-  SINGAPORE: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
-  KENO: ["TWO_TOP", "TWO_BOTTOM", "THREE_TOP", "THREE_TOD"],
 };
-
-/* =========================
-   LOTTERY DRAW TIMES (i18n SUPPORT)
-========================= */
 
 export const lotteryDrawTimes: Record<LotteryType, { th: string; en: string }> = {
   THAI_GOV: { th: "1 และ 16 ของทุกเดือน 15:00 น.", en: "1st & 16th monthly at 15:00" },
@@ -124,13 +87,7 @@ export const lotteryDrawTimes: Record<LotteryType, { th: string; en: string }> =
   STOCK_NIKKEI: { th: "จันทร์-ศุกร์ 14:30 น.", en: "Mon-Fri 14:30" },
   STOCK_HSI: { th: "จันทร์-ศุกร์ 16:00 น.", en: "Mon-Fri 16:00" },
   STOCK_DOW: { th: "จันทร์-ศุกร์ 04:00 น.", en: "Mon-Fri 04:00" },
-  STOCK_FTSE: { th: "จันทร์-ศุกร์ 23:30 น.", en: "Mon-Fri 23:30" },
-  STOCK_DAX: { th: "จันทร์-ศุกร์ 23:30 น.", en: "Mon-Fri 23:30" },
-  LAO: { th: "จันทร์-ศุกร์ 20:30 น.", en: "Mon-Fri 20:30" },
-  HANOI: { th: "ทุกวัน 18:30 น.", en: "Daily 18:30" },
   MALAYSIA: { th: "พ, ส, อา 19:00 น.", en: "Wed, Sat, Sun 19:00" },
-  SINGAPORE: { th: "พ, ส, อา 18:30 น.", en: "Wed, Sat, Sun 18:30" },
-  KENO: { th: "ทุก 5 นาที", en: "Every 5 minutes" },
 };
 
 /* =========================
@@ -149,11 +106,7 @@ export const users = sqliteTable("users", {
   createdAt: integer("created_at").notNull().default(sql`(strftime('%s','now'))`),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
-});
-
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
@@ -177,16 +130,13 @@ export const bets = sqliteTable("bets", {
   createdAt: integer("created_at").notNull().default(sql`(strftime('%s','now'))`),
 });
 
-export const insertBetSchema = createInsertSchema(bets).omit({
-  id: true,
-  createdAt: true,
-});
-
+export const insertBetSchema = createInsertSchema(bets).omit({ id: true, createdAt: true });
 export type Bet = typeof bets.$inferSelect;
 export type InsertBet = z.infer<typeof insertBetSchema>;
 
 /* =========================
    BLOCKED NUMBERS
+   ★ Added startDate / endDate
 ========================= */
 
 export const blockedNumbers = sqliteTable("blocked_numbers", {
@@ -195,6 +145,8 @@ export const blockedNumbers = sqliteTable("blocked_numbers", {
   number: text("number").notNull(),
   betType: text("bet_type"),
   isActive: integer("is_active").notNull().default(1),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
   createdAt: integer("created_at").notNull().default(sql`(strftime('%s','now'))`),
 });
 
@@ -233,7 +185,6 @@ export const affiliates = sqliteTable("affiliates", {
 
 /* =========================
    LOTTERY RESULTS
-   ★ FIX: เพิ่ม secondPrize เพื่อแก้ route error
 ========================= */
 
 export const lotteryResults = sqliteTable("lottery_results", {
@@ -241,8 +192,8 @@ export const lotteryResults = sqliteTable("lottery_results", {
   lotteryType: text("lottery_type").notNull(),
   drawDate: text("draw_date").notNull(),
   firstPrize: text("first_prize"),
-  secondPrize: text("second_prize"),               // ← เพิ่มใหม่: Malaysia 4D route ใช้
-  thirdPrize: text("third_prize"),                 // ← เพิ่มใหม่: Malaysia 4D route ใช้
+  secondPrize: text("second_prize"),
+  thirdPrize: text("third_prize"),
   threeDigitTop: text("three_digit_top"),
   threeDigitBottom: text("three_digit_bottom"),
   twoDigitTop: text("two_digit_top"),
@@ -281,6 +232,37 @@ export const betTypeSettings = sqliteTable("bet_type_settings", {
 });
 
 /* =========================
+   BET LIMITS ★ NEW
+========================= */
+
+export const betLimits = sqliteTable("bet_limits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  number: text("number").notNull(),
+  maxAmount: real("max_amount").notNull(),
+  isActive: integer("is_active").notNull().default(1),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  createdAt: integer("created_at").notNull().default(sql`(strftime('%s','now'))`),
+});
+
+export const betLimitLotteryTypes = sqliteTable("bet_limit_lottery_types", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  betLimitId: integer("bet_limit_id").notNull().references(() => betLimits.id, { onDelete: "cascade" }),
+  lotteryType: text("lottery_type").notNull(),
+});
+
+export type BetLimitWithLotteryTypes = {
+  id: number;
+  number: string;
+  maxAmount: number;
+  isActive: number;
+  startDate: string | null;
+  endDate: string | null;
+  createdAt: number;
+  lotteryTypes: string[];
+};
+
+/* =========================
    RELATIONS
 ========================= */
 
@@ -290,28 +272,24 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const betsRelations = relations(bets, ({ one }) => ({
-  user: one(users, {
-    fields: [bets.userId],
-    references: [users.id],
-  }),
+  user: one(users, { fields: [bets.userId], references: [users.id] }),
 }));
 
 export const transactionsRelations = relations(transactions, ({ one }) => ({
-  user: one(users, {
-    fields: [transactions.userId],
-    references: [users.id],
-  }),
+  user: one(users, { fields: [transactions.userId], references: [users.id] }),
 }));
 
 export const affiliatesRelations = relations(affiliates, ({ one }) => ({
-  referrer: one(users, {
-    fields: [affiliates.referrerId],
-    references: [users.id],
-  }),
-  referred: one(users, {
-    fields: [affiliates.referredId],
-    references: [users.id],
-  }),
+  referrer: one(users, { fields: [affiliates.referrerId], references: [users.id] }),
+  referred: one(users, { fields: [affiliates.referredId], references: [users.id] }),
+}));
+
+export const betLimitsRelations = relations(betLimits, ({ many }) => ({
+  lotteryTypes: many(betLimitLotteryTypes),
+}));
+
+export const betLimitLotteryTypesRelations = relations(betLimitLotteryTypes, ({ one }) => ({
+  betLimit: one(betLimits, { fields: [betLimitLotteryTypes.betLimitId], references: [betLimits.id] }),
 }));
 
 /* =========================
