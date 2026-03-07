@@ -10,6 +10,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { CartSheet } from "@/components/CartSheet";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Logo } from "@/components/Logo";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 import Home from "@/pages/Home";
 import Results from "@/pages/Results";
@@ -91,6 +92,8 @@ function Router() {
 }
 
 function App() {
+  useHeartbeat();
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark">

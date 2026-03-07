@@ -16,13 +16,12 @@ import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageToggle } from "./LanguageToggle";
 import { useI18n } from "@/lib/i18n";
-import { useUser, useAdmin } from "@/lib/store";
+import { useUser } from "@/lib/store";
 import {
   Home,
   Trophy,
   Users,
   User,
-  Settings,
   LogIn,
   LogOut,
   Wallet,
@@ -35,7 +34,6 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { t, language } = useI18n();
   const { isAuthenticated, logout } = useUser();
-  const { isAdminAuthenticated } = useAdmin();
 
   const mainMenuItems = [
     { title: t("nav.home"), url: "/", icon: Home },
@@ -101,29 +99,6 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
-
-        {isAdminAuthenticated && (
-          <>
-            <SidebarSeparator />
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.startsWith("/admin")}
-                    >
-                      <Link href="/admin">
-                        <Settings className="h-4 w-4" />
-                        <span>{t("nav.admin")}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

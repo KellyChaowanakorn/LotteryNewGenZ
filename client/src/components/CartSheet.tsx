@@ -38,11 +38,15 @@ export function CartSheet() {
     mutationFn: async () => {
       if (!user?.id) throw new Error("Not logged in");
       
+      // ★ FIX: Include isSet and setIndex for bot notification grouping
       const betItems = items.map(item => ({
         lotteryType: item.lotteryType,
         betType: item.betType,
         numbers: item.numbers,
-        amount: item.amount
+        amount: item.amount,
+        isSet: item.isSet || false,
+        setIndex: item.setIndex,
+        payoutRate: payoutRates[item.betType as BetType] || 90,
       }));
       
       const res = await apiRequest("POST", "/api/bets", { 
@@ -53,6 +57,7 @@ export function CartSheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/bets?userId=${user?.id}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}`] });
       clearCart();
       setIsOpen(false);

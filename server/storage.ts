@@ -602,6 +602,36 @@ export async function deleteBetLimit(id: number) {
 }
 
 /* =========================
+   UPDATE BET STATUS (MANUAL)
+   ★ Admin เปลี่ยนสถานะ bet + เติมเงินอัตโนมัติถ้าถูก
+========================= */
+
+export async function updateBetStatus(betId: number, status: string) {
+  const betArr = await db.select().from(bets).where(eq(bets.id, betId));
+  const bet = betArr[0];
+  if (!bet) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+
+  if (status === "won") {
+    // ★ แค่เปลี่ยนสถานะ ไม่เติมเงิน — admin ติดต่อลูกค้าเอง
+    await db.update(bets).set({
+      status: "won",
+      winAmount: bet.potentialWin,
+      processedAt: now,
+    }).where(eq(bets.id, betId));
+  } else if (status === "lost") {
+    await db.update(bets).set({
+      status: "lost",
+      winAmount: null,
+      processedAt: now,
+    }).where(eq(bets.id, betId));
+  }
+
+  return { ...bet, status };
+}
+
+/* =========================
    EXPORT STORAGE OBJECT
 ========================= */
 
@@ -618,6 +648,7 @@ export const storage = {
   createBet,
   getUserBets,
   getAllBets,
+  updateBetStatus,
 
   // transactions
   createTransaction,
