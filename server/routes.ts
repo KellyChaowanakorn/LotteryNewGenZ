@@ -676,6 +676,49 @@ export function registerRoutes(app: Express): Server {
   });
 
   /* =========================
+     CHAT ★ NEW
+  ========================= */
+
+  // User: get own chat messages
+  app.get("/api/chat/:userId", async (req: Request, res: Response) => {
+    try {
+      const userId = Number(req.params.userId);
+      const messages = await storage.getChatMessages(userId);
+      res.json(messages);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // User or Admin: send message
+  app.post("/api/chat", async (req: Request, res: Response) => {
+    try {
+      const { userId, senderType, message } = req.body;
+      if (!userId || !senderType || !message) {
+        return res.status(400).json({ error: "Missing fields" });
+      }
+      await storage.sendChatMessage(userId, senderType, message.trim());
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Mark messages as read
+  app.post("/api/chat/:userId/read", async (req: Request, res: Response) => {
+    try {
+      const userId = Number(req.params.userId);
+      const { senderType } = req.body;
+      await storage.markChatRead(userId, senderType);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Admin: get all chat conversations
+  app.get("/api/admin/chats", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const chats = await storage.getAllChats();
+      res.json(chats);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  /* =========================
      SETTINGS INIT
   ========================= */
 

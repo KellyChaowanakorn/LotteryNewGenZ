@@ -256,6 +256,9 @@ export default function Admin() {
   const [winnerNumbers, setWinnerNumbers] = useState("");
   const [winnerAmount, setWinnerAmount] = useState("");
   const [winnerWinAmount, setWinnerWinAmount] = useState("");
+  // ★ Chat state
+  const [selectedChatUserId, setSelectedChatUserId] = useState<number | null>(null);
+  const [adminChatMessage, setAdminChatMessage] = useState("");
 
   const handleLogout = async () => { await logout(); toast({ title: language === "th" ? "ออกจากระบบแล้ว" : "Logged out" }); setLocation("/admin/login"); };
 
@@ -300,6 +303,25 @@ export default function Admin() {
 
   interface BetTypeSetting { id: number; betType: string; isEnabled: boolean; updatedAt: string; }
   const { data: betTypeSettings = [], isLoading: isLoadingBetTypeSettings } = useQuery<BetTypeSetting[]>({ queryKey: ["/api/bet-type-settings"], enabled: isAdminAuthenticated });
+
+  // ★ Chat queries
+  interface ChatConvo { userId: number; username: string; lastMessage: string; lastTime: number; unreadCount: number; }
+  interface ChatMsg { id: number; userId: number; senderType: string; message: string; isRead: number; createdAt: number; }
+  const { data: chatList = [] } = useQuery<ChatConvo[]>({ queryKey: ["/api/admin/chats"], enabled: isAdminAuthenticated, refetchInterval: 5000 });
+  const { data: chatMessages = [] } = useQuery<ChatMsg[]>({ queryKey: [`/api/chat/${selectedChatUserId}`], enabled: isAdminAuthenticated && !!selectedChatUserId, refetchInterval: 3000 });
+  const totalChatUnread = chatList.reduce((s, c) => s + c.unreadCount, 0);
+
+  const sendAdminChatMutation = useMutation({
+    mutationFn: async ({ userId, message }: { userId: number; message: string }) => {
+      const res = await apiRequest("POST", "/api/chat", { userId, senderType: "admin", message });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/chat/${selectedChatUserId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/chats"] });
+      setAdminChatMessage("");
+    },
+  });
 
   // All existing mutations
   const updateBetTypeSettingMutation = useMutation({
@@ -459,7 +481,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-9">
+          <TabsList className="grid w-full grid-cols-10">
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm"><CreditCard className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>{pendingDeposits.length > 0 && <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">{pendingDeposits.length}</Badge>}</TabsTrigger>
             <TabsTrigger value="results" className="gap-1 text-xs sm:text-sm"><Trophy className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ผลหวย" : "Results"}</span></TabsTrigger>
             <TabsTrigger value="winners" className="gap-1 text-xs sm:text-sm"><CheckCircle className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ผู้ถูกรางวัล" : "Winners"}</span></TabsTrigger>
@@ -469,6 +491,7 @@ export default function Admin() {
             <TabsTrigger value="blocked" className="gap-1 text-xs sm:text-sm"><Ban className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "อั้น" : "Block"}</span></TabsTrigger>
             <TabsTrigger value="limits" className="gap-1 text-xs sm:text-sm"><Shield className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ลิมิต" : "Limits"}</span></TabsTrigger>
             <TabsTrigger value="bet-types" className="gap-1 text-xs sm:text-sm"><Play className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ประเภท" : "Types"}</span></TabsTrigger>
+            <TabsTrigger value="admin-chat" className="gap-1 text-xs sm:text-sm"><Info className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "แชท" : "Chat"}</span></TabsTrigger>
           </TabsList>
 
           {/* ==================== TRANSACTIONS ==================== */}
@@ -738,6 +761,65 @@ export default function Admin() {
               </CardContent>
             </Card>
             <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Settings className="h-5 w-5" />{language === "th" ? "สถานะปัจจุบัน" : "Status"}</CardTitle></CardHeader><CardContent><div className="flex flex-wrap gap-2">{betTypes.map(type => { const s = betTypeSettings.find(s => s.betType === type); const on = s?.isEnabled ?? true; return <Badge key={type} variant={on ? "default" : "destructive"} className="text-sm">{betTypeNames[type][language]}: {on ? (language === "th" ? "เปิด" : "ON") : (language === "th" ? "ปิด" : "OFF")}</Badge>; })}</div></CardContent></Card>
+          </TabsContent>
+
+          {/* ==================== ADMIN CHAT ★ NEW ==================== */}
+          <TabsContent value="admin-chat" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3" style={{ minHeight: "500px" }}>
+              {/* Left: Chat list */}
+              <Card className="md:col-span-1">
+                <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2"><Info className="h-5 w-5" />{language === "th" ? "สนทนา" : "Conversations"}{totalChatUnread > 0 && <Badge variant="destructive">{totalChatUnread}</Badge>}</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  {chatList.length === 0 ? (
+                    <div className="p-8 text-center text-muted-foreground"><Info className="h-10 w-10 mx-auto mb-2 opacity-50" /><p className="text-sm">{language === "th" ? "ยังไม่มีข้อความ" : "No messages"}</p></div>
+                  ) : (
+                    <div className="divide-y divide-border">{chatList.map(chat => (
+                      <div key={chat.userId} className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors ${selectedChatUserId === chat.userId ? "bg-primary/10 border-l-2 border-primary" : ""}`} onClick={() => { setSelectedChatUserId(chat.userId); apiRequest("POST", `/api/chat/${chat.userId}/read`, { senderType: "admin" }).then(() => queryClient.invalidateQueries({ queryKey: ["/api/admin/chats"] })).catch(() => {}); }}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">{chat.username.charAt(0).toUpperCase()}</div>
+                            <div className="min-w-0"><p className="font-medium text-sm truncate">{chat.username}</p><p className="text-xs text-muted-foreground truncate max-w-[150px]">{chat.lastMessage}</p></div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] text-muted-foreground">{new Date(chat.lastTime * 1000).toLocaleTimeString(language === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                            {chat.unreadCount > 0 && <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">{chat.unreadCount}</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Right: Chat messages */}
+              <Card className="md:col-span-2 flex flex-col">
+                {!selectedChatUserId ? (
+                  <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><Info className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>{language === "th" ? "เลือกสนทนาจากรายการด้านซ้าย" : "Select a conversation"}</p></div></div>
+                ) : (
+                  <>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="text-base flex items-center gap-2"><div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">{chatList.find(c => c.userId === selectedChatUserId)?.username?.charAt(0)?.toUpperCase() || "?"}</div>{chatList.find(c => c.userId === selectedChatUserId)?.username || `User #${selectedChatUserId}`}<span className="text-xs text-muted-foreground ml-auto">ID: {selectedChatUserId}</span></CardTitle></CardHeader>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/20" style={{ maxHeight: "350px" }}>
+                      {chatMessages.length === 0 ? (
+                        <div className="text-center text-muted-foreground py-8"><p className="text-sm">{language === "th" ? "ยังไม่มีข้อความ" : "No messages yet"}</p></div>
+                      ) : chatMessages.map(msg => (
+                        <div key={msg.id} className={`flex ${msg.senderType === "admin" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${msg.senderType === "admin" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card border border-border rounded-bl-sm"}`}>
+                            <p className="break-words">{msg.message}</p>
+                            <p className={`text-[10px] mt-1 ${msg.senderType === "admin" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{new Date(msg.createdAt * 1000).toLocaleTimeString(language === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-3 border-t">
+                      <div className="flex gap-2">
+                        <Input value={adminChatMessage} onChange={e => setAdminChatMessage(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && adminChatMessage.trim()) { e.preventDefault(); sendAdminChatMutation.mutate({ userId: selectedChatUserId, message: adminChatMessage.trim() }); } }} placeholder={language === "th" ? "พิมพ์ตอบกลับ..." : "Type reply..."} className="flex-1" disabled={sendAdminChatMutation.isPending} />
+                        <Button onClick={() => { if (adminChatMessage.trim()) sendAdminChatMutation.mutate({ userId: selectedChatUserId, message: adminChatMessage.trim() }); }} disabled={!adminChatMessage.trim() || sendAdminChatMutation.isPending}>{sendAdminChatMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === "th" ? "ส่ง" : "Send")}</Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+            </div>
           </TabsContent>
 
         </Tabs>

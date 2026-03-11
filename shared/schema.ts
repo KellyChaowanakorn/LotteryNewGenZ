@@ -293,6 +293,21 @@ export const betLimitLotteryTypesRelations = relations(betLimitLotteryTypes, ({ 
 }));
 
 /* =========================
+   CHAT MESSAGES ★ NEW
+========================= */
+
+export const chatMessages = sqliteTable("chat_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  senderType: text("sender_type").notNull(), // 'user' | 'admin'
+  message: text("message").notNull(),
+  isRead: integer("is_read").notNull().default(0),
+  createdAt: integer("created_at").notNull().default(sql`(strftime('%s','now'))`),
+});
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+
+/* =========================
    ZOD SCHEMAS (FRONTEND)
 ========================= */
 

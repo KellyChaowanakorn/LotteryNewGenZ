@@ -11,6 +11,7 @@ import { CartSheet } from "@/components/CartSheet";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Logo } from "@/components/Logo";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { ChatBubble } from "@/components/ChatBubble";
 
 import Home from "@/pages/Home";
 import Results from "@/pages/Results";
@@ -100,6 +101,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <ChatBubble />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

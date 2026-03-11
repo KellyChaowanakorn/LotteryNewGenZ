@@ -10,6 +10,7 @@ import {
   betTypeSettings,
   betLimits,
   betLimitLotteryTypes,
+  chatMessages,
   betTypes,
   payoutRates as defaultPayoutRates,
 } from "../shared/schema";
@@ -632,6 +633,52 @@ export async function updateBetStatus(betId: number, status: string) {
 }
 
 /* =========================
+   CHAT MESSAGES ★ NEW
+========================= */
+
+export async function getChatMessages(userId: number) {
+  return db.select().from(chatMessages).where(eq(chatMessages.userId, userId)).orderBy(chatMessages.createdAt);
+}
+
+export async function sendChatMessage(userId: number, senderType: string, message: string) {
+  await db.insert(chatMessages).values({ userId, senderType, message, isRead: 0 });
+}
+
+export async function markChatRead(userId: number, senderType: string) {
+  // Mark messages FROM the other side as read
+  const readType = senderType === 'admin' ? 'user' : 'admin';
+  await db.update(chatMessages).set({ isRead: 1 }).where(
+    and(eq(chatMessages.userId, userId), eq(chatMessages.senderType, readType), eq(chatMessages.isRead, 0))
+  );
+}
+
+export async function getAllChats() {
+  // Get all unique userIds that have chat messages
+  const allMessages = await db.select().from(chatMessages).orderBy(desc(chatMessages.createdAt));
+  
+  const chatMap: Record<number, { userId: number; username: string; lastMessage: string; lastTime: number; unreadCount: number }> = {};
+  
+  for (const msg of allMessages) {
+    if (!chatMap[msg.userId]) {
+      const user = await getUserById(msg.userId);
+      chatMap[msg.userId] = {
+        userId: msg.userId,
+        username: user?.username || `User #${msg.userId}`,
+        lastMessage: msg.message,
+        lastTime: msg.createdAt,
+        unreadCount: 0,
+      };
+    }
+    // Count unread from users (admin hasn't read)
+    if (msg.senderType === 'user' && !msg.isRead) {
+      chatMap[msg.userId].unreadCount++;
+    }
+  }
+  
+  return Object.values(chatMap).sort((a, b) => b.lastTime - a.lastTime);
+}
+
+/* =========================
    EXPORT STORAGE OBJECT
 ========================= */
 
@@ -693,4 +740,10 @@ export const storage = {
   addBetLimit,
   updateBetLimitStatus,
   deleteBetLimit,
+
+  // chat
+  getChatMessages,
+  sendChatMessage,
+  markChatRead,
+  getAllChats,
 };
