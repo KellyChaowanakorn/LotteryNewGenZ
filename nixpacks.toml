@@ -2,16 +2,7 @@ providers = ["node"]
 
 [variables]
 NIXPACKS_NODE_VERSION = "20"
-
-[phases.setup]
-nixPkgs = ["python3", "gcc", "gnumake"]
-nixLibs = ["gcc-unwrapped"]
-
-[phases.install]
-cmds = ["npm install"]
-
-[phases.build]
-cmds = ["npx drizzle-kit push", "npm run build"]
+NIXPACKS_APT_PKGS = "python3 make g++"
 
 [start]
 cmd = "npm run start"
