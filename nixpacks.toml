@@ -1,0 +1,14 @@
+[variables]
+NODE_VERSION = "20"
+
+[phases.setup]
+aptPkgs = ["python3", "make", "g++", "build-essential"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npm run db:push", "npm run build"]
+
+[start]
+cmd = "npm run start"
