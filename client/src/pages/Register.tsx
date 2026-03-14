@@ -8,7 +8,7 @@ import { Logo } from "@/components/Logo";
 import { useI18n } from "@/lib/i18n";
 import { useUser } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
-import { Lock, User, ArrowRight, Gift } from "lucide-react";
+import { Lock, User, ArrowRight, Gift, MessageCircle, Phone } from "lucide-react";
 
 export default function Register() {
   const { language, t } = useI18n();
@@ -21,6 +21,8 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
+  const [lineId, setLineId] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -50,10 +52,18 @@ export default function Register() {
       return;
     }
 
+    // ★ Validate: at least LINE ID or Phone required
+    if (!lineId.trim() && !phoneNumber.trim()) {
+      toast({
+        title: language === "th" ? "กรุณากรอก LINE ID หรือเบอร์โทรอย่างน้อย 1 อย่าง" : "Please enter LINE ID or phone number (at least one)",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // Generate unique referral code for this user
       const newReferralCode = `QNQ${Date.now().toString(36).toUpperCase()}`;
 
       const res = await fetch("/api/register", {
@@ -64,6 +74,8 @@ export default function Register() {
           password,
           referralCode: newReferralCode,
           referredBy: referralCode || null,
+          lineId: lineId.trim() || null,
+          phoneNumber: phoneNumber.trim() || null,
         }),
         credentials: "include",
       });
@@ -163,6 +175,58 @@ export default function Register() {
                 />
               </div>
             </div>
+
+            {/* ★ LINE ID */}
+            <div className="space-y-2">
+              <Label htmlFor="lineId" className="flex items-center gap-1">
+                <MessageCircle className="h-3 w-3 text-green-500" />
+                LINE ID
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({language === "th" ? "หรือกรอกเบอร์โทร" : "or enter phone"})
+                </span>
+              </Label>
+              <div className="relative">
+                <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                <Input
+                  id="lineId"
+                  type="text"
+                  value={lineId}
+                  onChange={(e) => setLineId(e.target.value)}
+                  placeholder={language === "th" ? "กรอก LINE ID" : "Enter LINE ID"}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* ★ Phone Number */}
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber" className="flex items-center gap-1">
+                <Phone className="h-3 w-3 text-blue-500" />
+                {language === "th" ? "เบอร์โทรศัพท์" : "Phone Number"}
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({language === "th" ? "หรือกรอก LINE ID" : "or enter LINE ID"})
+                </span>
+              </Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
+                <Input
+                  id="phoneNumber"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+\-]/g, ""))}
+                  placeholder="0812345678"
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* ★ Warning if both empty */}
+            {!lineId && !phoneNumber && (
+              <p className="text-xs text-orange-500 flex items-center gap-1">
+                ⚠️ {language === "th" ? "กรุณากรอก LINE ID หรือเบอร์โทรอย่างน้อย 1 ช่อง" : "Please fill at least LINE ID or phone number"}
+              </p>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="referral">
                 {language === "th" ? "รหัสแนะนำ (ถ้ามี)" : "Referral Code (optional)"}

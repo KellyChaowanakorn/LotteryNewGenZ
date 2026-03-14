@@ -11,6 +11,7 @@ import {
   betLimits,
   betLimitLotteryTypes,
   chatMessages,
+  userContacts,
   betTypes,
   payoutRates as defaultPayoutRates,
 } from "../shared/schema";
@@ -679,6 +680,36 @@ export async function getAllChats() {
 }
 
 /* =========================
+   USER CONTACTS ★ NEW
+========================= */
+
+export async function createUserContact(data: {
+  username: string;
+  lineId?: string | null;
+  phoneNumber?: string | null;
+}) {
+  const registerTime = new Date().toISOString().split('T')[0];
+  const existing = await db.select().from(userContacts).where(eq(userContacts.username, data.username));
+  if (existing.length > 0) return existing[0];
+  await db.insert(userContacts).values({
+    username: data.username,
+    lineId: data.lineId || null,
+    phoneNumber: data.phoneNumber || null,
+    registerTime,
+  });
+  const result = await db.select().from(userContacts).where(eq(userContacts.username, data.username));
+  return result[0];
+}
+
+export async function getAllUserContacts() {
+  return db.select().from(userContacts).orderBy(desc(userContacts.id));
+}
+
+export async function deleteUserContact(id: number) {
+  await db.delete(userContacts).where(eq(userContacts.id, id));
+}
+
+/* =========================
    EXPORT STORAGE OBJECT
 ========================= */
 
@@ -746,4 +777,9 @@ export const storage = {
   sendChatMessage,
   markChatRead,
   getAllChats,
+
+  // user contacts
+  createUserContact,
+  getAllUserContacts,
+  deleteUserContact,
 };

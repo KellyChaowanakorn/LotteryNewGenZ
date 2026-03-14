@@ -293,6 +293,21 @@ export const betLimitLotteryTypesRelations = relations(betLimitLotteryTypes, ({ 
 }));
 
 /* =========================
+   USER CONTACTS ★ NEW
+   เก็บข้อมูลติดต่อลูกค้าตอนสมัคร
+========================= */
+
+export const userContacts = sqliteTable("user_contacts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(),
+  lineId: text("line_id"),
+  phoneNumber: text("phone_number"),
+  registerTime: text("register_time").notNull(),
+});
+
+export type UserContact = typeof userContacts.$inferSelect;
+
+/* =========================
    CHAT MESSAGES ★ NEW
 ========================= */
 

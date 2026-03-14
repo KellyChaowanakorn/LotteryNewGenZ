@@ -35,7 +35,8 @@ import {
   CreditCard, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock,
   BarChart3, UserX, UserCheck, LineChart, PieChart, Trophy, Play,
   LogOut, ImageIcon, Calendar, CalendarCheck, CalendarX, Info,
-  RefreshCw, Globe, Wifi, Landmark, ExternalLink, AlertCircle
+  RefreshCw, Globe, Wifi, Landmark, ExternalLink, AlertCircle,
+  ArrowUpRight, User as UserIcon
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -323,6 +324,15 @@ export default function Admin() {
     },
   });
 
+  // ★ User contacts query + delete mutation
+  interface UserContactData { id: number; username: string; lineId: string | null; phoneNumber: string | null; registerTime: string; }
+  const { data: userContacts = [] } = useQuery<UserContactData[]>({ queryKey: ["/api/admin/user-contacts"], enabled: isAdminAuthenticated });
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => { const res = await apiRequest("DELETE", `/api/admin/user-contacts/${id}`); return res.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/user-contacts"] }); toast({ title: language === "th" ? "ลบข้อมูลติดต่อแล้ว" : "Contact deleted" }); },
+  });
+  const handleDownloadCSV = () => { window.open("/api/admin/user-contacts/download", "_blank"); };
+
   // All existing mutations
   const updateBetTypeSettingMutation = useMutation({
     mutationFn: async ({ betType, isEnabled }: { betType: string; isEnabled: boolean }) => { const res = await apiRequest("PATCH", `/api/bet-type-settings/${betType}`, { isEnabled }); return res.json(); },
@@ -481,7 +491,7 @@ export default function Admin() {
 
       <div className="p-4 md:p-6 pt-0">
         <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-10">
+          <TabsList className="grid w-full" style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}>
             <TabsTrigger value="transactions" className="gap-1 text-xs sm:text-sm"><CreditCard className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ธุรกรรม" : "Trans"}</span>{pendingDeposits.length > 0 && <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">{pendingDeposits.length}</Badge>}</TabsTrigger>
             <TabsTrigger value="results" className="gap-1 text-xs sm:text-sm"><Trophy className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ผลหวย" : "Results"}</span></TabsTrigger>
             <TabsTrigger value="winners" className="gap-1 text-xs sm:text-sm"><CheckCircle className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ผู้ถูกรางวัล" : "Winners"}</span></TabsTrigger>
@@ -492,6 +502,7 @@ export default function Admin() {
             <TabsTrigger value="limits" className="gap-1 text-xs sm:text-sm"><Shield className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ลิมิต" : "Limits"}</span></TabsTrigger>
             <TabsTrigger value="bet-types" className="gap-1 text-xs sm:text-sm"><Play className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ประเภท" : "Types"}</span></TabsTrigger>
             <TabsTrigger value="admin-chat" className="gap-1 text-xs sm:text-sm"><Info className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "แชท" : "Chat"}</span></TabsTrigger>
+            <TabsTrigger value="user-data" className="gap-1 text-xs sm:text-sm"><UserIcon className="h-4 w-4" /><span className="hidden sm:inline">{language === "th" ? "ข้อมูล" : "Data"}</span></TabsTrigger>
           </TabsList>
 
           {/* ==================== TRANSACTIONS ==================== */}
@@ -820,6 +831,61 @@ export default function Admin() {
                 )}
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ==================== USER DATA ★ NEW ==================== */}
+          <TabsContent value="user-data" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="text-lg flex items-center gap-2"><UserIcon className="h-5 w-5" />{language === "th" ? "ข้อมูลส่วนตัวผู้ใช้" : "User Contact Data"}<Badge variant="secondary">{userContacts.length}</Badge></CardTitle>
+                  <Button variant="default" size="sm" className="gap-1" onClick={handleDownloadCSV} disabled={userContacts.length === 0}>
+                    <ArrowUpRight className="h-4 w-4" />{language === "th" ? "ดาวน์โหลด CSV" : "Download CSV"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {userContacts.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground"><UserIcon className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>{language === "th" ? "ยังไม่มีข้อมูล" : "No data yet"}</p></div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>{language === "th" ? "ชื่อผู้ใช้" : "Username"}</TableHead>
+                        <TableHead>LINE ID</TableHead>
+                        <TableHead>{language === "th" ? "เบอร์โทร" : "Phone"}</TableHead>
+                        <TableHead>{language === "th" ? "วันที่สมัคร" : "Registered"}</TableHead>
+                        <TableHead className="text-right">{language === "th" ? "จัดการ" : "Actions"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {userContacts.map(c => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-mono text-muted-foreground">#{c.id}</TableCell>
+                          <TableCell className="font-medium">{c.username}</TableCell>
+                          <TableCell>{c.lineId ? <Badge variant="secondary" className="gap-1 text-xs">💬 {c.lineId}</Badge> : <span className="text-muted-foreground text-xs">-</span>}</TableCell>
+                          <TableCell>{c.phoneNumber ? <Badge variant="outline" className="gap-1 text-xs">📱 {c.phoneNumber}</Badge> : <span className="text-muted-foreground text-xs">-</span>}</TableCell>
+                          <TableCell className="text-sm">{c.registerTime}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => { if (confirm(language === "th" ? `ลบข้อมูลติดต่อ ${c.username}? (ไม่ลบบัญชี)` : `Delete contact for ${c.username}? (Account stays)`)) deleteContactMutation.mutate(c.id); }} disabled={deleteContactMutation.isPending}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="border-dashed">
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">
+                  {language === "th" ? "* ข้อมูลนี้เก็บอัตโนมัติตอนสมัคร ลบข้อมูลติดต่อไม่กระทบบัญชีผู้ใช้ กด Download CSV เพื่อเก็บไฟล์ใน local machine" : "* Auto-collected on registration. Deleting contacts doesn't affect user accounts. Download CSV to save locally."}
+                </p>
+              </CardContent>
+            </Card>
           </TabsContent>
 
         </Tabs>

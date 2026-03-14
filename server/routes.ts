@@ -77,7 +77,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/register", async (req: Request, res: Response) => {
-    const { username, password, referralCode, referredBy } = req.body;
+    const { username, password, referralCode, referredBy, lineId, phoneNumber } = req.body;
     try {
       const existing = await storage.getUserByUsername(username);
       if (existing) {
@@ -85,6 +85,14 @@ export function registerRoutes(app: Express): Server {
       }
       await storage.createUser({ username, password, referralCode, referredBy: referredBy || null });
       const user = await storage.getUserByUsername(username);
+
+      // ★ Save contact data automatically
+      try {
+        await storage.createUserContact({ username, lineId: lineId || null, phoneNumber: phoneNumber || null });
+      } catch (contactErr) {
+        console.error("Contact save error:", contactErr);
+      }
+
       res.json({ user });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -673,6 +681,37 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  /* =========================
+     USER CONTACTS ★ NEW
+  ========================= */
+
+  app.get("/api/admin/user-contacts", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const contacts = await storage.getAllUserContacts();
+      res.json(contacts);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/admin/user-contacts/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteUserContact(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/admin/user-contacts/download", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const contacts = await storage.getAllUserContacts();
+      let csv = "username,lineId,phoneNumber,registerTime\n";
+      contacts.forEach(c => {
+        csv += `${c.username},${c.lineId || ""},${c.phoneNumber || ""},${c.registerTime}\n`;
+      });
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=user_contacts.csv");
+      res.send(csv);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
   /* =========================
