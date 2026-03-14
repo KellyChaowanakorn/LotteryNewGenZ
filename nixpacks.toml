@@ -1,14 +1,17 @@
+providers = ["node"]
+
 [variables]
-NODE_VERSION = "20"
+NIXPACKS_NODE_VERSION = "20"
 
 [phases.setup]
-aptPkgs = ["python3", "make", "g++", "build-essential"]
+nixPkgs = ["python3", "gcc", "gnumake"]
+nixLibs = ["gcc-unwrapped"]
 
 [phases.install]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npm run db:push", "npm run build"]
+cmds = ["npx drizzle-kit push", "npm run build"]
 
 [start]
 cmd = "npm run start"
