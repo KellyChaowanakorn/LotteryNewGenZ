@@ -7,12 +7,11 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { useAdmin } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { Shield, Lock, User } from "lucide-react";
 
 export default function AdminLogin() {
   const { language, t } = useI18n();
-  const { setAdminAuthenticated } = useAdmin();
+  const { login } = useAdmin();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -24,30 +23,22 @@ export default function AdminLogin() {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const response = await apiRequest("POST", "/api/admin/login", { username, password });
-      const data = await response.json();
-      
-      if (data.success) {
-        setAdminAuthenticated(true);
-        toast({
-          title: language === "th" ? "เข้าสู่ระบบสำเร็จ" : "Login successful"
-        });
-        setLocation("/admin");
-      } else {
-        toast({
-          title: language === "th" ? "ข้อมูลไม่ถูกต้อง" : "Invalid credentials",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
+    const result = await login(username, password);
+
+    if (result.success) {
+      toast({
+        title: language === "th" ? "เข้าสู่ระบบสำเร็จ" : "Login successful"
+      });
+      setLocation("/admin");
+    } else {
       toast({
         title: language === "th" ? "ข้อมูลไม่ถูกต้อง" : "Invalid credentials",
+        description: result.error,
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -107,8 +98,6 @@ export default function AdminLogin() {
               {isLoading ? (language === "th" ? "กำลังเข้าสู่ระบบ..." : "Logging in...") : t("nav.login")}
             </Button>
           </form>
-
-         
         </CardContent>
       </Card>
     </div>

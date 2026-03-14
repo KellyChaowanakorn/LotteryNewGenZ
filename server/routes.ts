@@ -25,25 +25,27 @@ import {
 
 export function registerRoutes(app: Express): Server {
   /* =========================
-     ADMIN AUTH (Session-based)
+     ADMIN AUTH (Token-based — works on Railway/production)
   ========================= */
 
-  const ADMIN_USERNAME = "QNQgod1688";
-  const ADMIN_PASSWORD = "$$$QNQgod1688";
+  const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "QNQgod1688";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "$$$QNQgod1688";
+  const ADMIN_TOKEN = "QNQ_" + Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}:secret`).toString("base64");
 
   const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
+    const token = req.headers["x-admin-token"] as string;
+    if (token === ADMIN_TOKEN || req.session?.isAdmin) {
+      return next();
     }
-    next();
+    return res.status(401).json({ error: "Unauthorized" });
   };
 
   app.post("/api/admin/login", (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
       if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        req.session.isAdmin = true;
-        return res.json({ success: true, message: "Admin login successful" });
+        if (req.session) req.session.isAdmin = true;
+        return res.json({ success: true, token: ADMIN_TOKEN });
       }
       return res.status(401).json({ success: false, error: "Invalid credentials" });
     } catch (error) {
@@ -52,15 +54,16 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.get("/api/admin/check", (req: Request, res: Response) => {
-    res.json({ isAdmin: req.session.isAdmin === true });
+    const token = req.headers["x-admin-token"] as string;
+    res.json({ isAdmin: token === ADMIN_TOKEN || req.session?.isAdmin === true });
   });
 
   app.post("/api/admin/logout", (req: Request, res: Response) => {
-    req.session.isAdmin = false;
-    req.session.destroy((err) => {
-      if (err) console.error("Session destroy error:", err);
-    });
-    res.json({ success: true, message: "Admin logged out" });
+    if (req.session) {
+      req.session.isAdmin = false;
+      req.session.destroy(() => {});
+    }
+    res.json({ success: true });
   });
 
   /* =========================
@@ -77,7 +80,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/register", async (req: Request, res: Response) => {
-    const { username, password, referralCode, referredBy, lineId, phoneNumber } = req.body;
+    const { username, password, referralCode, referredBy } = req.body;
     try {
       const existing = await storage.getUserByUsername(username);
       if (existing) {
@@ -85,14 +88,6 @@ export function registerRoutes(app: Express): Server {
       }
       await storage.createUser({ username, password, referralCode, referredBy: referredBy || null });
       const user = await storage.getUserByUsername(username);
-
-      // ★ Save contact data automatically
-      try {
-        await storage.createUserContact({ username, lineId: lineId || null, phoneNumber: phoneNumber || null });
-      } catch (contactErr) {
-        console.error("Contact save error:", contactErr);
-      }
-
       res.json({ user });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -681,37 +676,6 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
-  });
-
-  /* =========================
-     USER CONTACTS ★ NEW
-  ========================= */
-
-  app.get("/api/admin/user-contacts", requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const contacts = await storage.getAllUserContacts();
-      res.json(contacts);
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
-
-  app.delete("/api/admin/user-contacts/:id", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      await storage.deleteUserContact(Number(req.params.id));
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
-
-  app.get("/api/admin/user-contacts/download", requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const contacts = await storage.getAllUserContacts();
-      let csv = "username,lineId,phoneNumber,registerTime\n";
-      contacts.forEach(c => {
-        csv += `${c.username},${c.lineId || ""},${c.phoneNumber || ""},${c.registerTime}\n`;
-      });
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", "attachment; filename=user_contacts.csv");
-      res.send(csv);
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
   /* =========================

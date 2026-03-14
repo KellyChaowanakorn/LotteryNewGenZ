@@ -11,11 +11,6 @@ import type {
    CART
 ========================= */
 
-/**
- * Frontend cart items include `potentialWin`,
- * even though backend CartItem type does not.
- * This is a TYPE EXTENSION ONLY — no behavior change.
- */
 type CartItemWithWin = CartItem & {
   potentialWin: number;
 };
@@ -104,46 +99,78 @@ export const useUser = create<UserState>()(
 );
 
 /* =========================
-   ADMIN
+   ADMIN (Token-based — works on Railway/production)
 ========================= */
 
 interface AdminState {
   isAdminAuthenticated: boolean;
+  adminToken: string | null;
   setAdminAuthenticated: (value: boolean) => void;
+  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   checkAdminStatus: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
 export const useAdmin = create<AdminState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       isAdminAuthenticated: false,
+      adminToken: null,
 
       setAdminAuthenticated: (value) =>
         set({ isAdminAuthenticated: value }),
 
-      checkAdminStatus: async () => {
+      login: async (username, password) => {
         try {
-          const res = await fetch('/api/admin/check', {
+          const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
             credentials: 'include',
           });
           const data = await res.json();
-          set({ isAdminAuthenticated: data.isAdmin === true });
-          return data.isAdmin === true;
+          if (data.success && data.token) {
+            set({ isAdminAuthenticated: true, adminToken: data.token });
+            return { success: true };
+          }
+          return { success: false, error: data.error || 'Login failed' };
         } catch {
+          return { success: false, error: 'Network error' };
+        }
+      },
+
+      checkAdminStatus: async () => {
+        const token = get().adminToken;
+        if (!token) {
           set({ isAdminAuthenticated: false });
+          return false;
+        }
+        try {
+          const res = await fetch('/api/admin/check', {
+            headers: { 'x-admin-token': token },
+            credentials: 'include',
+          });
+          const data = await res.json();
+          const isAdmin = data.isAdmin === true;
+          set({ isAdminAuthenticated: isAdmin });
+          if (!isAdmin) set({ adminToken: null });
+          return isAdmin;
+        } catch {
+          set({ isAdminAuthenticated: false, adminToken: null });
           return false;
         }
       },
 
       logout: async () => {
+        const token = get().adminToken;
         try {
           await fetch('/api/admin/logout', {
             method: 'POST',
+            headers: token ? { 'x-admin-token': token } : {},
             credentials: 'include',
           });
         } catch {}
-        set({ isAdminAuthenticated: false });
+        set({ isAdminAuthenticated: false, adminToken: null });
       },
     }),
     {
@@ -153,13 +180,45 @@ export const useAdmin = create<AdminState>()(
 );
 
 /* =========================
+   ★ Global fetch interceptor
+   Automatically adds admin token to ALL API requests
+   so useQuery/useMutation work without modification
+========================= */
+
+if (typeof window !== 'undefined') {
+  const _originalFetch = window.fetch;
+  window.fetch = async function (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> {
+    try {
+      const stored = localStorage.getItem('qnq-admin');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const token = parsed?.state?.adminToken;
+        if (token) {
+          init = init || {};
+          const existingHeaders =
+            init.headers instanceof Headers
+              ? Object.fromEntries(init.headers.entries())
+              : (init.headers as Record<string, string>) || {};
+          init.headers = {
+            ...existingHeaders,
+            'x-admin-token': token,
+          };
+        }
+      }
+    } catch {
+      // Silently fail — don't break non-admin requests
+    }
+    return _originalFetch.call(window, input, init);
+  };
+}
+
+/* =========================
    BLOCKED NUMBERS
 ========================= */
 
-/**
- * DTO shape returned by API
- * (not a Drizzle table type)
- */
 interface BlockedNumberDTO {
   lotteryType: LotteryType;
   number: string;
